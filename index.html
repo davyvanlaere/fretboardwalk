@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Fretboardwalk — Major Scale Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#1c1410;
+    --bg-panel:#241a14;
+    --bg-panel-2:#2c2019;
+    --fret-wire:#b9afa0;
+    --nut:#d9c08b;
+    --string:#e4d9c4;
+    --text-cream:#f1e9da;
+    --text-muted:#a99a85;
+    --text-dim:#7a6c5b;
+    --accent-brass:#c9a15c;
+    --accent-brass-bright:#e8c684;
+    --accent-teal:#5fb6a8;
+    --accent-wrong:#b5493b;
+    --accent-almost:#c98b3f;
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100dvh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% -10%, #2a1e16 0%, transparent 60%),
+      radial-gradient(ellipse 1200px 800px at 50% 110%, #1a120d 0%, #0f0a07 70%);
+    font-family:'Inter', sans-serif;
+    color:var(--text-cream);
+    overscroll-behavior:none;
+  }
+
+  .app{
+    width:100%;
+    max-width:460px;
+    height:100dvh;
+    max-height:900px;
+    background:var(--bg-deep);
+    display:flex;
+    flex-direction:column;
+    border-radius:28px;
+    overflow:hidden;
+    box-shadow:0 40px 100px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.04);
+    position:relative;
+  }
+
+  @media (max-width:600px){
+    body{ background:#0f0a07; }
+    .app{
+      max-width:100%;
+      width:100vw;
+      height:100dvh;
+      max-height:none;
+      border-radius:0;
+      box-shadow:none;
+      border:none;
+    }
+  }
+
+  /* ---------- header ---------- */
+  header{
+    flex:0 0 auto;
+    padding:calc(16px + env(safe-area-inset-top)) 20px 12px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    border-bottom:1px solid rgba(255,255,255,.06);
+    background:var(--bg-panel);
+  }
+  .brand{ display:flex; align-items:baseline; gap:8px; }
+  .brand .mark{ font-size:18px; color:var(--accent-brass); }
+  .brand h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:18px;
+    letter-spacing:.01em;
+    margin:0;
+  }
+  .key-select{ position:relative; }
+  .key-select select{
+    appearance:none; -webkit-appearance:none;
+    background:var(--bg-panel-2);
+    border:1px solid rgba(255,255,255,.1);
+    color:var(--text-cream);
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    padding:8px 26px 8px 12px;
+    border-radius:10px;
+    cursor:pointer;
+  }
+  .key-select::after{
+    content:'▾'; position:absolute; right:9px; top:50%;
+    transform:translateY(-50%); color:var(--text-muted); font-size:10px;
+    pointer-events:none;
+  }
+  .gear-btn{
+    width:34px; height:34px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg-panel-2);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:10px;
+    color:var(--text-muted);
+    cursor:pointer;
+    font-size:15px;
+    margin-left:8px;
+  }
+  .header-right{ display:flex; align-items:center; }
+
+  /* ---------- settings drawer ---------- */
+  .settings{
+    max-height:0; overflow:hidden;
+    transition:max-height .28s ease;
+    background:var(--bg-panel-2);
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .settings.open{ max-height:260px; }
+  .settings-inner{ padding:14px 20px 16px; display:flex; flex-direction:column; gap:14px; }
+  .setting-row{ display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--text-muted); }
+  .setting-row.stack{ flex-direction:column; align-items:stretch; gap:8px; }
+  .segmented{
+    display:flex; background:var(--bg-deep); border:1px solid rgba(255,255,255,.08);
+    border-radius:10px; padding:3px; gap:3px;
+  }
+  .seg-btn{
+    flex:1; background:transparent; border:none; color:var(--text-muted);
+    font-family:'JetBrains Mono', monospace; font-size:10.5px; letter-spacing:.02em;
+    padding:8px 4px; border-radius:7px; cursor:pointer;
+  }
+  .seg-btn.active{ background:var(--accent-brass); color:#241a14; font-weight:600; }
+  .toggle{
+    width:42px; height:24px; background:#3a2b20; border-radius:20px;
+    position:relative; cursor:pointer; border:1px solid rgba(255,255,255,.08);
+    transition:background .2s; flex:0 0 auto;
+  }
+  .toggle.on{ background:var(--accent-brass); }
+  .toggle .knob{
+    position:absolute; top:2px; left:2px; width:18px; height:18px;
+    background:var(--text-cream); border-radius:50%; transition:left .2s;
+  }
+  .toggle.on .knob{ left:20px; background:#241a14; }
+  .restart-btn{
+    align-self:flex-start; background:transparent; border:1px solid rgba(255,255,255,.15);
+    color:var(--text-muted); font-family:'JetBrains Mono', monospace; font-size:11px;
+    padding:7px 12px; border-radius:8px; cursor:pointer; letter-spacing:.03em;
+  }
+
+  /* ---------- instruction plaques ---------- */
+  .plaques{ flex:0 0 auto; display:flex; padding:12px 20px 10px; gap:10px; }
+  .plaque{
+    flex:1; background:linear-gradient(160deg, var(--bg-panel-2), var(--bg-panel));
+    border:1px solid rgba(255,255,255,.06); border-radius:14px;
+    padding:9px 12px 10px; text-align:center; position:relative;
+  }
+  .plaque .eyebrow{
+    font-family:'JetBrains Mono', monospace; font-size:9px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--text-dim); margin-bottom:3px;
+  }
+  .plaque .num{ font-family:'Fraunces', serif; font-weight:600; font-size:27px; line-height:1; color:var(--text-cream); }
+  .plaque .roman{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--text-muted); margin-top:2px; letter-spacing:.05em; }
+  .plaque.current .num{ color:var(--accent-brass-bright); }
+  .plaque.target{ border-color:rgba(95,182,168,.25); }
+  .plaque.target .num{ color:var(--accent-teal); }
+  .plaque.target .eyebrow{ color:#4a8a80; }
+
+  /* ---------- fretboard ---------- */
+  .board-area{ flex:1 1 auto; display:flex; min-height:0; padding:0 0 8px; }
+  .fretboard-wrap{ display:flex; flex:1; min-height:0; min-width:0; }
+  .fretboard-wrap.vertical{ flex-direction:column; }
+
+  .string-labels{ position:relative; flex:0 0 26px; }
+  .string-labels span{
+    position:absolute;
+    font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--text-dim);
+    white-space:nowrap; line-height:1;
+  }
+  .fretboard-wrap:not(.vertical) .string-labels span{ left:14px; transform:translateY(-50%); }
+  .fretboard-wrap.vertical .string-labels{ flex:0 0 20px; }
+  .fretboard-wrap.vertical .string-labels span{ top:4px; transform:translateX(-50%); }
+
+  .neck-scroll{
+    flex:1 1 auto; min-height:0; min-width:0;
+    overflow-x:auto; overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .fretboard-wrap.vertical .neck-scroll{ overflow-x:hidden; overflow-y:auto; }
+  .neck-scroll::-webkit-scrollbar{ display:none; }
+  svg#board{ display:block; touch-action:pan-x; }
+  .fretboard-wrap.vertical svg#board{ touch-action:pan-y; margin:0 auto; }
+
+  .note-hit{ cursor:pointer; }
+  .note-visible{ transition:r .15s, fill .15s, stroke .15s; }
+  .note-label{ font-family:'JetBrains Mono', monospace; pointer-events:none; user-select:none; }
+
+  @keyframes pulse-ring{
+    0%{ opacity:.55; r:15; }
+    100%{ opacity:0; r:26; }
+  }
+  .pulse{ animation:pulse-ring 1.6s ease-out infinite; transform-origin:center; }
+
+  @keyframes flash-wrong{
+    0%,100%{ stroke:var(--accent-wrong); stroke-width:2.5; }
+    50%{ stroke:var(--accent-wrong); stroke-width:4.5; }
+  }
+  .wrong-flash{ animation:flash-wrong .35s ease-in-out 2; }
+
+  @keyframes flash-almost{
+    0%,100%{ stroke:var(--accent-almost); stroke-width:2.5; }
+    50%{ stroke:var(--accent-almost); stroke-width:4.5; }
+  }
+  .almost-flash{ animation:flash-almost .35s ease-in-out 2; }
+
+  @keyframes flash-correct{
+    0%,100%{ stroke:var(--accent-brass-bright); stroke-width:2.5; opacity:1; }
+    50%{ stroke:var(--accent-brass-bright); stroke-width:5; opacity:1; }
+  }
+  .correct-flash{ animation:flash-correct .32s ease-in-out 2; }
+
+  @keyframes flash-hint{
+    0%,100%{ opacity:.3; }
+    50%{ opacity:1; }
+  }
+  .hint-flash{ animation:flash-hint .4s ease-in-out 3; stroke:var(--accent-teal) !important; }
+
+  /* ---------- footer / tab bar ---------- */
+  footer{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+    padding:12px 18px calc(14px + env(safe-area-inset-bottom));
+    background:var(--bg-panel); border-top:1px solid rgba(255,255,255,.06);
+  }
+  .streak{ font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:6px; }
+  .streak .dot{ color:var(--accent-brass); }
+  .hint-btn{
+    background:var(--bg-panel-2); border:1px solid rgba(255,255,255,.1); color:var(--text-cream);
+    font-family:'Inter', sans-serif; font-weight:500; font-size:13px;
+    padding:10px 20px; border-radius:22px; cursor:pointer;
+  }
+  .hint-btn:active{ background:#3a2b20; }
+  .spacer34{ width:34px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header>
+    <div class="brand">
+      <span class="mark">♪</span>
+      <h1>Fretboardwalk</h1>
+    </div>
+    <div class="header-right">
+      <div class="key-select">
+        <select id="keySelect" aria-label="Key"></select>
+      </div>
+      <div class="gear-btn" id="gearBtn" aria-label="Settings">⚙</div>
+    </div>
+  </header>
+
+  <div class="settings" id="settingsDrawer">
+    <div class="settings-inner">
+      <div class="setting-row stack">
+        <span>Scale notes on the neck</span>
+        <div class="segmented" id="noteVisibilitySeg">
+          <button class="seg-btn" data-val="numerals">Numerals</button>
+          <button class="seg-btn" data-val="dots">Dots only</button>
+          <button class="seg-btn active" data-val="hidden">Hidden</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span>Numerals mode shows note names</span>
+        <div class="toggle" id="toggleNames"><div class="knob"></div></div>
+      </div>
+      <div class="setting-row">
+        <span>Sound feedback</span>
+        <div class="toggle on" id="toggleSound"><div class="knob"></div></div>
+      </div>
+      <button class="restart-btn" id="restartBtn">RESTART FROM ROOT</button>
+    </div>
+  </div>
+
+  <div class="plaques">
+    <div class="plaque current">
+      <div class="eyebrow">Current</div>
+      <div class="num" id="curNum">1</div>
+      <div class="roman" id="curRoman">I</div>
+    </div>
+    <div class="plaque target">
+      <div class="eyebrow">Find</div>
+      <div class="num" id="tgtNum">5</div>
+      <div class="roman" id="tgtRoman">V</div>
+    </div>
+  </div>
+
+  <div class="board-area">
+    <div class="fretboard-wrap" id="fretboardWrap">
+      <div class="string-labels" id="stringLabels"></div>
+      <div class="neck-scroll" id="neckScroll">
+        <svg id="board"></svg>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="streak"><span class="dot">●</span><span id="streakVal">0</span> streak</div>
+    <button class="hint-btn" id="hintBtn">Hint</button>
+    <div class="spacer34"></div>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- music theory data ----------
+  const STRINGS = [
+    {name:'E', midi:40},
+    {name:'A', midi:45},
+    {name:'D', midi:50},
+    {name:'G', midi:55},
+    {name:'B', midi:59},
+    {name:'E', midi:64},
+  ];
+  const KEYS = [
+    {name:'C major',  pc:0},
+    {name:'G major',  pc:7},
+    {name:'D major',  pc:2},
+    {name:'A major',  pc:9},
+    {name:'E major',  pc:4},
+    {name:'B major',  pc:11},
+    {name:'F♯ major', pc:6},
+    {name:'D♭ major', pc:1},
+    {name:'A♭ major', pc:8},
+    {name:'E♭ major', pc:3},
+    {name:'B♭ major', pc:10},
+    {name:'F major',  pc:5},
+  ];
+  const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+  const DEGREE_ROMAN = {1:'I',2:'ii',3:'iii',4:'IV',5:'V',6:'vi',7:'vii°'};
+  const SCALE_OFFSETS = {0:1,2:2,4:3,5:4,7:5,9:6,11:7};
+  const FRET_COUNT = 15;
+
+  // ---------- state ----------
+  let state = {
+    keyIndex:0,
+    noteDisplay:'hidden', // 'numerals' | 'dots' | 'hidden' — how non-current scale tones are drawn
+    showNames:false,
+    soundOn:true,
+    current:{string:0, fret:0},
+    targetDegree:5,
+    streak:0,
+  };
+
+  const mq = window.matchMedia('(max-width:600px)');
+
+  function degreeAt(s,f){
+    const pc=(STRINGS[s].midi+f)%12;
+    const root=KEYS[state.keyIndex].pc;
+    const diff=(pc-root+12)%12;
+    return SCALE_OFFSETS[diff] || null;
+  }
+  function pitchClassAt(s,f){ return (STRINGS[s].midi+f)%12; }
+  function absPitch(s,f){ return STRINGS[s].midi+f; }
+
+  function findTarget(fromS,fromF,targetDegree){
+    const fromAbs = absPitch(fromS,fromF);
+    let best=null, bestDiff=Infinity;
+    let bestAny=null, bestAnyDiff=Infinity;
+    for(let s=0;s<6;s++){
+      for(let f=0; f<=FRET_COUNT; f++){
+        if(degreeAt(s,f)===targetDegree){
+          const a = absPitch(s,f);
+          const d = a - fromAbs;
+          if(d>0 && d<bestDiff){ bestDiff=d; best={string:s,fret:f}; }
+          const ad = Math.abs(a-fromAbs);
+          if(ad>0 && ad<bestAnyDiff){ bestAnyDiff=ad; bestAny={string:s,fret:f}; }
+        }
+      }
+    }
+    return best || bestAny;
+  }
+
+  function pickNextTargetDegree(){
+    const cur = degreeAt(state.current.string, state.current.fret);
+    let d;
+    do { d = 1 + Math.floor(Math.random()*7); } while(d===cur);
+    return d;
+  }
+
+  function rootStartPosition(){
+    const root = KEYS[state.keyIndex].pc;
+    for(let f=0; f<=12; f++){
+      if(((STRINGS[0].midi+f)%12)===root) return {string:0, fret:f};
+    }
+    return {string:0, fret:0};
+  }
+
+  // ---------- layout (computed once per orientation) ----------
+  let layout = null;
+
+  function computeLayout(){
+    const orientation = mq.matches ? 'vertical' : 'horizontal';
+
+    const openWidth = 56;
+    const widths = [openWidth];
+    let w = 74;
+    for(let i=1;i<=FRET_COUNT;i++){ widths.push(w); w *= 0.965; }
+    const xStart = [0];
+    for(let i=1;i<widths.length;i++) xStart.push(xStart[i-1]+widths[i-1]);
+    const xCenter = widths.map((wd,i)=> xStart[i] + wd/2);
+    const totalPrimary = xStart[xStart.length-1] + widths[widths.length-1];
+
+    // measure the actual room available for the neck's cross-axis (string spread)
+    // so shrinking other UI chrome directly translates into a wider, more tappable neck
+    const scroller = document.getElementById('neckScroll');
+    let measured = orientation==='vertical' ? scroller.clientWidth : scroller.clientHeight;
+    if(!measured) measured = orientation==='vertical' ? 320 : 220;
+    const crossSize = Math.max(190, Math.min(measured, 340));
+
+    const stringMargin = 24, wireMargin = 12, nutMargin = 8;
+    const crossPositions = [];
+    for(let i=0;i<6;i++) crossPositions.push(stringMargin + i*((crossSize-2*stringMargin)/5));
+
+    return {orientation, widths, xStart, xCenter, totalPrimary, crossSize, crossPositions, wireMargin, nutMargin};
+  }
+
+  function toXY(primary, cross){
+    if(layout.orientation==='vertical') return {x:cross, y:primary};
+    return {x:primary, y:cross};
+  }
+
+  const SVGNS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs){
+    const e = document.createElementNS(SVGNS, tag);
+    for(const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function buildStaticBoard(){
+    layout = computeLayout();
+    const wrap = document.getElementById('fretboardWrap');
+    wrap.classList.toggle('vertical', layout.orientation==='vertical');
+
+    const svgW = layout.orientation==='vertical' ? layout.crossSize : layout.totalPrimary;
+    const svgH = layout.orientation==='vertical' ? layout.totalPrimary : layout.crossSize;
+
+    const svg = document.getElementById('board');
+    svg.setAttribute('width', svgW);
+    svg.setAttribute('height', svgH);
+    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+    svg.innerHTML = '';
+
+    svg.appendChild(el('rect', {x:0,y:0,width:svgW,height:svgH, fill:'#2a1d15'}));
+
+    // fret wires
+    for(let f=1; f<=FRET_COUNT; f++){
+      const p1 = toXY(layout.xStart[f], layout.wireMargin);
+      const p2 = toXY(layout.xStart[f], layout.crossSize-layout.wireMargin);
+      svg.appendChild(el('line', {
+        x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
+        stroke:'#b9afa0', 'stroke-width':1.4, opacity:.55
+      }));
+    }
+    // nut
+    const n1 = toXY(2, layout.nutMargin);
+    const n2 = toXY(2, layout.crossSize-layout.nutMargin);
+    svg.appendChild(el('line', {x1:n1.x, y1:n1.y, x2:n2.x, y2:n2.y, stroke:'#d9c08b', 'stroke-width':5}));
+
+    // position markers
+    const singles = [3,5,7,9,15];
+    const midCross = (layout.crossPositions[2]+layout.crossPositions[3])/2;
+    singles.forEach(f=>{
+      if(f>FRET_COUNT) return;
+      const p = toXY(layout.xCenter[f], midCross);
+      svg.appendChild(el('circle', {cx:p.x, cy:p.y, r:3.2, fill:'#c9a15c', opacity:.35}));
+    });
+    if(FRET_COUNT>=12){
+      const c1 = (layout.crossPositions[1]+layout.crossPositions[2])/2;
+      const c2 = (layout.crossPositions[3]+layout.crossPositions[4])/2;
+      const p1_ = toXY(layout.xCenter[12], c1);
+      const p2_ = toXY(layout.xCenter[12], c2);
+      svg.appendChild(el('circle', {cx:p1_.x, cy:p1_.y, r:3.2, fill:'#c9a15c', opacity:.35}));
+      svg.appendChild(el('circle', {cx:p2_.x, cy:p2_.y, r:3.2, fill:'#c9a15c', opacity:.35}));
+    }
+
+    // fret numbers
+    [0,3,5,7,9,12,15].forEach(f=>{
+      if(f>FRET_COUNT) return;
+      const p = toXY(layout.xCenter[f], layout.crossSize-13);
+      const t = el('text', {
+        x:p.x, y:p.y+3, 'text-anchor':'middle', 'font-size':9, fill:'#7a6c5b', class:'note-label'
+      });
+      t.textContent = f;
+      svg.appendChild(t);
+    });
+
+    // strings
+    STRINGS.forEach((s,i)=>{
+      const thickness = 1 + (5-i)*0.35;
+      const p1s = toXY(0, layout.crossPositions[i]);
+      const p2s = toXY(layout.totalPrimary, layout.crossPositions[i]);
+      svg.appendChild(el('line', {
+        x1:p1s.x, y1:p1s.y, x2:p2s.x, y2:p2s.y,
+        stroke:'#e4d9c4', 'stroke-width':thickness, opacity:.85
+      }));
+    });
+
+    const g = el('g', {id:'notesGroup'});
+    svg.appendChild(g);
+
+    const labelWrap = document.getElementById('stringLabels');
+    labelWrap.innerHTML = '';
+    if(layout.orientation==='vertical'){
+      labelWrap.style.width = layout.crossSize+'px';
+      labelWrap.style.height = '';
+    } else {
+      labelWrap.style.height = layout.crossSize+'px';
+      labelWrap.style.width = '';
+    }
+    STRINGS.forEach((s,i)=>{
+      const span = document.createElement('span');
+      span.textContent = s.name;
+      if(layout.orientation==='vertical'){
+        span.style.left = layout.crossPositions[i]+'px';
+      } else {
+        span.style.top = layout.crossPositions[i]+'px';
+      }
+      labelWrap.appendChild(span);
+    });
+  }
+
+  function renderNotes(){
+    const g = document.getElementById('notesGroup');
+    g.innerHTML = '';
+    const curDeg = degreeAt(state.current.string, state.current.fret);
+
+    for(let s=0;s<6;s++){
+      for(let f=0; f<=FRET_COUNT; f++){
+        const deg = degreeAt(s,f);
+        const isCurrent = (deg!==null && deg===curDeg);
+        const p = toXY(layout.xCenter[f], layout.crossPositions[s]);
+        const cx = p.x, cy = p.y;
+
+        const wrap = el('g', {class:'note-hit', 'data-s':s, 'data-f':f});
+
+        // large invisible hit area for comfortable tapping
+        wrap.appendChild(el('circle', {cx, cy, r:16, fill:'transparent'}));
+
+        if(isCurrent){
+          wrap.appendChild(el('circle', {cx, cy, r:15, fill:'none', stroke:'#e8c684', 'stroke-width':2, class:'pulse'}));
+
+          const circle = el('circle', {cx, cy, r:12.5, fill:'#c9a15c', stroke:'#e8c684', 'stroke-width':2, class:'note-visible'});
+          wrap.appendChild(circle);
+
+          const text = el('text', {
+            x:cx, y:cy+3.6, 'text-anchor':'middle', 'font-size':10.5, 'font-weight':600,
+            fill:'#241a14', class:'note-label'
+          });
+          text.textContent = deg;
+          wrap.appendChild(text);
+        } else if(deg!==null && state.noteDisplay!=='hidden'){
+          // scale tone shown per the configured visibility mode
+          const circle = el('circle', {cx, cy, r:9.5, fill:'#241a14', stroke:'rgba(233,224,205,.35)', 'stroke-width':1.3, class:'note-visible'});
+          wrap.appendChild(circle);
+
+          if(state.noteDisplay==='numerals'){
+            const label = state.showNames ? NOTE_NAMES[pitchClassAt(s,f)] : deg;
+            const text = el('text', {
+              x:cx, y:cy+3.4, 'text-anchor':'middle', 'font-size':9.5, 'font-weight':500,
+              fill:'#c9bba5', class:'note-label'
+            });
+            text.textContent = label;
+            wrap.appendChild(text);
+          }
+        } else {
+          // fully hidden: only a transparent feedback ring, revealed briefly on tap
+          const ring = el('circle', {cx, cy, r:9.5, fill:'transparent', stroke:'transparent', 'stroke-width':2.5, class:'note-visible'});
+          wrap.appendChild(ring);
+        }
+
+        wrap.addEventListener('click', ()=> handleClick(s,f,wrap));
+        g.appendChild(wrap);
+      }
+    }
+  }
+
+  // ---------- interaction ----------
+  let audioCtx;
+  function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+  function playTone(correct){
+    if(!state.soundOn) return;
+    try{
+      ensureAudio();
+      const ctx = audioCtx;
+      const o = ctx.createOscillator();
+      const gn = ctx.createGain();
+      o.connect(gn); gn.connect(ctx.destination);
+      o.type = 'sine';
+      const now = ctx.currentTime;
+      if(correct){
+        o.frequency.setValueAtTime(440, now);
+        o.frequency.setValueAtTime(660, now+0.08);
+        gn.gain.setValueAtTime(0.14, now);
+        gn.gain.exponentialRampToValueAtTime(0.001, now+0.3);
+        o.start(now); o.stop(now+0.32);
+      } else {
+        o.frequency.setValueAtTime(150, now);
+        gn.gain.setValueAtTime(0.1, now);
+        gn.gain.exponentialRampToValueAtTime(0.001, now+0.22);
+        o.start(now); o.stop(now+0.24);
+      }
+    }catch(e){}
+  }
+
+  function flashClass(node, cls){
+    const ring = node.querySelector('.note-visible');
+    if(!ring) return;
+    ring.classList.add(cls);
+    setTimeout(()=> ring.classList.remove(cls), 700);
+  }
+
+  function centerOn(s,f){
+    const scroller = document.getElementById('neckScroll');
+    const primaryPos = layout.xCenter[f];
+    if(layout.orientation==='vertical'){
+      const target = primaryPos - scroller.clientHeight/2;
+      scroller.scrollTo({top: Math.max(0,target), behavior:'smooth'});
+    } else {
+      const target = primaryPos - scroller.clientWidth/2;
+      scroller.scrollTo({left: Math.max(0,target), behavior:'smooth'});
+    }
+  }
+
+  function handleClick(s,f,groupEl){
+    const deg = degreeAt(s,f);
+    const curDeg = degreeAt(state.current.string, state.current.fret);
+    const isCurrentPos = (deg!==null && deg===curDeg);
+    if(isCurrentPos) return;
+    const target = findTarget(state.current.string, state.current.fret, state.targetDegree);
+
+    if(target && target.string===s && target.fret===f){
+      playTone(true);
+      flashClass(groupEl, 'correct-flash');
+      state.streak++;
+      document.getElementById('streakVal').textContent = state.streak;
+
+      setTimeout(()=>{
+        state.current = {string:s, fret:f};
+        state.targetDegree = pickNextTargetDegree();
+        renderNotes();
+        renderPlaques();
+        centerOn(s,f);
+      }, 380);
+    } else if(deg===state.targetDegree){
+      playTone(false);
+      flashClass(groupEl, 'almost-flash');
+    } else {
+      playTone(false);
+      flashClass(groupEl, 'wrong-flash');
+      state.streak = 0;
+      document.getElementById('streakVal').textContent = 0;
+    }
+  }
+
+  function renderPlaques(){
+    const curDeg = degreeAt(state.current.string, state.current.fret);
+    document.getElementById('curNum').textContent = curDeg;
+    document.getElementById('curRoman').textContent = DEGREE_ROMAN[curDeg];
+    document.getElementById('tgtNum').textContent = state.targetDegree;
+    document.getElementById('tgtRoman').textContent = DEGREE_ROMAN[state.targetDegree];
+  }
+
+  // ---------- hint ----------
+  document.getElementById('hintBtn').addEventListener('click', ()=>{
+    const target = findTarget(state.current.string, state.current.fret, state.targetDegree);
+    if(!target) return;
+    centerOn(target.string, target.fret);
+    setTimeout(()=>{
+      const g = document.getElementById('notesGroup');
+      const groupEl = Array.from(g.children).find(c => +c.getAttribute('data-s')===target.string && +c.getAttribute('data-f')===target.fret);
+      if(groupEl) flashClass(groupEl, 'hint-flash');
+    }, 350);
+  });
+
+  // ---------- settings ----------
+  const keySelect = document.getElementById('keySelect');
+  KEYS.forEach((k,i)=>{
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = k.name;
+    keySelect.appendChild(opt);
+  });
+  keySelect.addEventListener('change', ()=>{
+    state.keyIndex = +keySelect.value;
+    resetRun();
+  });
+
+  document.getElementById('gearBtn').addEventListener('click', ()=>{
+    document.getElementById('settingsDrawer').classList.toggle('open');
+  });
+
+  const noteVisibilitySeg = document.getElementById('noteVisibilitySeg');
+  noteVisibilitySeg.querySelectorAll('.seg-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.noteDisplay = btn.dataset.val;
+      noteVisibilitySeg.querySelectorAll('.seg-btn').forEach(b=> b.classList.toggle('active', b===btn));
+      renderNotes();
+    });
+  });
+
+  const toggleNames = document.getElementById('toggleNames');
+  toggleNames.addEventListener('click', ()=>{
+    state.showNames = !state.showNames;
+    toggleNames.classList.toggle('on', state.showNames);
+    renderNotes();
+  });
+
+  const toggleSound = document.getElementById('toggleSound');
+  toggleSound.addEventListener('click', ()=>{
+    state.soundOn = !state.soundOn;
+    toggleSound.classList.toggle('on', state.soundOn);
+  });
+
+  document.getElementById('restartBtn').addEventListener('click', resetRun);
+
+  function resetRun(){
+    state.current = rootStartPosition();
+    state.targetDegree = pickNextTargetDegree();
+    state.streak = 0;
+    document.getElementById('streakVal').textContent = 0;
+    renderNotes();
+    renderPlaques();
+    const scroller = document.getElementById('neckScroll');
+    scroller.scrollTo({left:0, top:0, behavior:'smooth'});
+  }
+
+  // rebuild board if crossing the phone/desktop breakpoint (e.g. rotation, resize)
+  function handleOrientationChange(){
+    buildStaticBoard();
+    renderNotes();
+    renderPlaques();
+    const scroller = document.getElementById('neckScroll');
+    scroller.scrollLeft = 0;
+    scroller.scrollTop = 0;
+  }
+  if(mq.addEventListener) mq.addEventListener('change', handleOrientationChange);
+  else mq.addListener(handleOrientationChange);
+
+  let resizeTimer;
+  window.addEventListener('resize', ()=>{
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(handleOrientationChange, 150);
+  });
+
+  // ---------- init ----------
+  function init(){
+    state.current = rootStartPosition();
+    state.targetDegree = pickNextTargetDegree();
+    buildStaticBoard();
+    renderNotes();
+    renderPlaques();
+  }
+  init();
+
+})();
+</script>
+
+</body>
+</html>
