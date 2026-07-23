@@ -56,7 +56,12 @@
     position:relative;
   }
 
-  @media (max-width:600px){
+  .stage{ flex:1 1 auto; display:flex; flex-direction:column; min-height:0; min-width:0; }
+  .side{ flex:0 0 auto; display:flex; flex-direction:column; min-width:0; }
+  .side-slot{ display:none; }
+
+  /* full-bleed app look on phones and portrait tablets */
+  @media (max-width:600px), (orientation:portrait) and (max-width:900px){
     body{ background:#0f0a07; }
     .app{
       max-width:100%;
@@ -125,7 +130,7 @@
     background:var(--bg-panel-2);
     border-bottom:1px solid rgba(255,255,255,.06);
   }
-  .settings.open{ max-height:260px; }
+  .settings.open{ max-height:330px; }
   .settings-inner{ padding:14px 20px 16px; display:flex; flex-direction:column; gap:14px; }
   .setting-row{ display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--text-muted); }
   .setting-row.stack{ flex-direction:column; align-items:stretch; gap:8px; }
@@ -168,6 +173,7 @@
     text-transform:uppercase; color:var(--text-dim); margin-bottom:3px;
   }
   .plaque .num{ font-family:'Fraunces', serif; font-weight:600; font-size:27px; line-height:1; color:var(--text-cream); }
+  .plaque .num.wide{ font-size:22px; }
   .plaque .roman{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--text-muted); margin-top:2px; letter-spacing:.05em; }
   .plaque.current .num{ color:var(--accent-brass-bright); }
   .plaque.target{ border-color:rgba(95,182,168,.25); }
@@ -179,15 +185,9 @@
   .fretboard-wrap{ display:flex; flex:1; min-height:0; min-width:0; }
   .fretboard-wrap.vertical{ flex-direction:column; }
 
-  .string-labels{ position:relative; flex:0 0 26px; }
-  .string-labels span{
-    position:absolute;
-    font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--text-dim);
-    white-space:nowrap; line-height:1;
-  }
-  .fretboard-wrap:not(.vertical) .string-labels span{ left:14px; transform:translateY(-50%); }
-  .fretboard-wrap.vertical .string-labels{ flex:0 0 20px; }
-  .fretboard-wrap.vertical .string-labels span{ top:4px; transform:translateX(-50%); }
+  .string-labels{ display:flex; flex:0 0 auto; align-items:center; }
+  svg#gutter{ display:block; }
+  .fretboard-wrap.vertical .string-labels{ justify-content:center; align-items:flex-start; }
 
   .neck-scroll{
     flex:1 1 auto; min-height:0; min-width:0;
@@ -195,12 +195,22 @@
     -webkit-overflow-scrolling:touch;
     scrollbar-width:none;
   }
+  /* horizontal neck is centred inside a full-height scroller: the scroller keeps
+     a definite height so crossSize can be measured from it, while the board sits
+     centred within. Centring the wrap itself would make height depend on the SVG
+     that height is derived from. */
+  .fretboard-wrap:not(.vertical) .neck-scroll{ display:flex; align-items:center; }
   .fretboard-wrap.vertical .neck-scroll{ overflow-x:hidden; overflow-y:auto; }
   .neck-scroll::-webkit-scrollbar{ display:none; }
-  svg#board{ display:block; touch-action:pan-x; }
+  svg#board{ display:block; flex:0 0 auto; touch-action:pan-x; }
   .fretboard-wrap.vertical svg#board{ touch-action:pan-y; margin:0 auto; }
 
-  .note-hit{ cursor:pointer; }
+  /* Strict split: #cellsGroup is the only interactive layer. Everything drawn
+     above it is decoration and must never intercept a click — the note circles
+     sit exactly on the strings, so if they take events the strings go dead and
+     only the gaps between them stay clickable. */
+  #notesGroup{ pointer-events:none; }
+  .fret-cell{ cursor:pointer; }
   .note-visible{ transition:r .15s, fill .15s, stroke .15s; }
   .note-label{ font-family:'JetBrains Mono', monospace; pointer-events:none; user-select:none; }
 
@@ -228,27 +238,87 @@
   }
   .correct-flash{ animation:flash-correct .32s ease-in-out 2; }
 
-  @keyframes flash-hint{
-    0%,100%{ opacity:.3; }
-    50%{ opacity:1; }
-  }
-  .hint-flash{ animation:flash-hint .4s ease-in-out 3; stroke:var(--accent-teal) !important; }
-
   /* ---------- footer / tab bar ---------- */
   footer{
-    flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center;
     padding:12px 18px calc(14px + env(safe-area-inset-bottom));
     background:var(--bg-panel); border-top:1px solid rgba(255,255,255,.06);
   }
   .streak{ font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:6px; }
   .streak .dot{ color:var(--accent-brass); }
-  .hint-btn{
-    background:var(--bg-panel-2); border:1px solid rgba(255,255,255,.1); color:var(--text-cream);
-    font-family:'Inter', sans-serif; font-weight:500; font-size:13px;
-    padding:10px 20px; border-radius:22px; cursor:pointer;
+
+  /* ================= WIDE SCREENS =================
+     Desktop and landscape tablets get a real two-column workspace:
+     a persistent control rail on the left, and a neck that fills the
+     remaining width so all 15 frets are visible without scrolling. */
+  @media (min-width:1000px){
+    body{ padding:32px; }
+    .app{
+      max-width:1500px;
+      max-height:820px;
+      height:calc(100dvh - 64px);
+      border-radius:20px;
+    }
+
+    header{ padding:20px 28px; }
+    .brand h1{ font-size:22px; }
+    .brand .mark{ font-size:21px; }
+    .gear-btn{ display:none; }
+    .key-select select{ font-size:13px; padding:10px 30px 10px 14px; }
+
+    .stage{ flex-direction:row; }
+
+    .side{
+      flex:0 0 300px;
+      padding:26px 24px;
+      gap:22px;
+      border-right:1px solid rgba(255,255,255,.06);
+      background:linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-deep) 100%);
+      overflow-y:auto;
+      scrollbar-width:none;
+    }
+    .side::-webkit-scrollbar{ display:none; }
+
+    /* plaques stack and grow — they're the primary readout on desktop */
+    .plaques{ flex-direction:column; padding:0; gap:14px; }
+    .plaque{ padding:18px 20px 20px; border-radius:18px; }
+    .plaque .eyebrow{ font-size:10px; letter-spacing:.16em; margin-bottom:8px; }
+    .plaque .num{ font-size:76px; }
+    .plaque .num.wide{ font-size:58px; }
+    .plaque .roman{ font-size:14px; margin-top:6px; }
+    .plaque.target{ border-color:rgba(95,182,168,.3); }
+
+    /* settings live inline in the rail, no drawer */
+    .side-slot{ display:flex; flex-direction:column; gap:22px; }
+    .side .settings{
+      max-height:none; overflow:visible; background:transparent;
+      border:none; border-top:1px solid rgba(255,255,255,.06);
+    }
+    .side .settings-inner{ padding:20px 0 0; gap:16px; }
+    .side .setting-row{ font-size:12.5px; }
+    .side .streak{
+      font-size:12px; padding-top:18px;
+      border-top:1px solid rgba(255,255,255,.06);
+    }
+    .side .restart-btn{ width:100%; text-align:center; padding:10px 12px; }
+
+    #appFooter{ display:none; }
+
+    .board-area{ padding:20px 28px; }
+    .string-labels{ opacity:.9; }
   }
-  .hint-btn:active{ background:#3a2b20; }
-  .spacer34{ width:34px; }
+
+  /* smaller wide screens (landscape tablets, small laptops): keep the rail
+     from crowding the neck */
+  @media (min-width:1000px) and (max-width:1279px){
+    body{ padding:20px; }
+    .app{ height:calc(100dvh - 40px); }
+    .side{ flex:0 0 232px; padding:20px 18px; gap:16px; }
+    .plaque{ padding:14px 16px 15px; }
+    .plaque .num{ font-size:54px; }
+    .plaque .num.wide{ font-size:42px; }
+    .board-area{ padding:16px 20px; }
+  }
 </style>
 </head>
 <body>
@@ -279,6 +349,10 @@
         </div>
       </div>
       <div class="setting-row">
+        <span>Include lowered degrees (♭3 ♭6 ♭7)</span>
+        <div class="toggle" id="toggleFlats"><div class="knob"></div></div>
+      </div>
+      <div class="setting-row">
         <span>Numerals mode shows note names</span>
         <div class="toggle" id="toggleNames"><div class="knob"></div></div>
       </div>
@@ -290,32 +364,37 @@
     </div>
   </div>
 
-  <div class="plaques">
-    <div class="plaque current">
-      <div class="eyebrow">Current</div>
-      <div class="num" id="curNum">1</div>
-      <div class="roman" id="curRoman">I</div>
-    </div>
-    <div class="plaque target">
-      <div class="eyebrow">Find</div>
-      <div class="num" id="tgtNum">5</div>
-      <div class="roman" id="tgtRoman">V</div>
-    </div>
-  </div>
+  <div class="stage">
 
-  <div class="board-area">
-    <div class="fretboard-wrap" id="fretboardWrap">
-      <div class="string-labels" id="stringLabels"></div>
-      <div class="neck-scroll" id="neckScroll">
-        <svg id="board"></svg>
+    <aside class="side" id="sidePanel">
+      <div class="plaques">
+        <div class="plaque current">
+          <div class="eyebrow">Current</div>
+          <div class="num" id="curNum">1</div>
+          <div class="roman" id="curRoman">I</div>
+        </div>
+        <div class="plaque target">
+          <div class="eyebrow">Find</div>
+          <div class="num" id="tgtNum">5</div>
+          <div class="roman" id="tgtRoman">V</div>
+        </div>
+      </div>
+      <div class="side-slot" id="sideSlot"></div>
+    </aside>
+
+    <div class="board-area">
+      <div class="fretboard-wrap" id="fretboardWrap">
+        <div class="string-labels" id="stringLabels"><svg id="gutter"></svg></div>
+        <div class="neck-scroll" id="neckScroll">
+          <svg id="board"></svg>
+        </div>
       </div>
     </div>
+
   </div>
 
-  <footer>
-    <div class="streak"><span class="dot">●</span><span id="streakVal">0</span> streak</div>
-    <button class="hint-btn" id="hintBtn">Hint</button>
-    <div class="spacer34"></div>
+  <footer id="appFooter">
+    <div class="streak" id="streakBox"><span class="dot">●</span><span id="streakVal">0</span> streak</div>
   </footer>
 
 </div>
@@ -348,8 +427,17 @@
     {name:'F major',  pc:5},
   ];
   const NOTE_NAMES = ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
-  const DEGREE_ROMAN = {1:'I',2:'ii',3:'iii',4:'IV',5:'V',6:'vi',7:'vii°'};
-  const SCALE_OFFSETS = {0:1,2:2,4:3,5:4,7:5,9:6,11:7};
+  // Degrees are tokens rather than plain numbers so the lowered ones fit the
+  // same system: everything (state, comparisons, data attributes, display)
+  // speaks one vocabulary and nothing needs special-casing for flats.
+  const MAJOR_OFFSETS = {0:'1', 2:'2', 4:'3', 5:'4', 7:'5', 9:'6', 11:'7'};
+  const FLAT_OFFSETS  = {3:'b3', 8:'b6', 10:'b7'};   // ♭3 ♭6 ♭7
+  const BASE_DEGREES  = ['1','2','3','4','5','6','7'];
+  const FLAT_DEGREES  = ['b3','b6','b7'];
+  const DEGREE_LABEL = {'1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7',
+                        'b3':'\u266D3','b6':'\u266D6','b7':'\u266D7'};
+  const DEGREE_ROMAN = {'1':'I','2':'ii','3':'iii','4':'IV','5':'V','6':'vi','7':'vii\u00B0',
+                        'b3':'\u266DIII','b6':'\u266DVI','b7':'\u266DVII'};
   const FRET_COUNT = 15;
 
   // ---------- state ----------
@@ -357,46 +445,50 @@
     keyIndex:0,
     noteDisplay:'hidden', // 'numerals' | 'dots' | 'hidden' — how non-current scale tones are drawn
     showNames:false,
+    includeFlats:false,   // ask for b3/b6/b7 as well — off by default
     soundOn:true,
     current:{string:0, fret:0},
-    targetDegree:5,
+    prevDegree:null,      // degree we just came from — never sent straight back to it
+    targetDegree:'5',
     streak:0,
   };
 
-  const mq = window.matchMedia('(max-width:600px)');
+  // Neck runs vertically on phones and tablets (a neck is long and thin, so it
+  // suits the tall axis); horizontal only on true desktop widths. Wide screens
+  // additionally get the sidebar layout, so 1000-1100px = rail + vertical neck.
+  const mq = window.matchMedia('(max-width:1100px)');
+  const mqWide = window.matchMedia('(min-width:1000px)');
+
+  // Which visual row a string is drawn on. Horizontal fretboard diagrams put the
+  // low E at the BOTTOM, so the draw order inverts; vertical diagrams put it on
+  // the LEFT, matching the array order. Every routine that positions something
+  // per-string goes through this, so visuals and hit cells can't disagree.
+  function rowOf(stringIndex){
+    return layout.orientation==='vertical' ? stringIndex : 5-stringIndex;
+  }
 
   function degreeAt(s,f){
     const pc=(STRINGS[s].midi+f)%12;
     const root=KEYS[state.keyIndex].pc;
     const diff=(pc-root+12)%12;
-    return SCALE_OFFSETS[diff] || null;
+    if(MAJOR_OFFSETS[diff]) return MAJOR_OFFSETS[diff];
+    if(state.includeFlats && FLAT_OFFSETS[diff]) return FLAT_OFFSETS[diff];
+    return null;
+  }
+
+  function enabledDegrees(){
+    return state.includeFlats ? BASE_DEGREES.concat(FLAT_DEGREES) : BASE_DEGREES;
   }
   function pitchClassAt(s,f){ return (STRINGS[s].midi+f)%12; }
-  function absPitch(s,f){ return STRINGS[s].midi+f; }
-
-  function findTarget(fromS,fromF,targetDegree){
-    const fromAbs = absPitch(fromS,fromF);
-    let best=null, bestDiff=Infinity;
-    let bestAny=null, bestAnyDiff=Infinity;
-    for(let s=0;s<6;s++){
-      for(let f=0; f<=FRET_COUNT; f++){
-        if(degreeAt(s,f)===targetDegree){
-          const a = absPitch(s,f);
-          const d = a - fromAbs;
-          if(d>0 && d<bestDiff){ bestDiff=d; best={string:s,fret:f}; }
-          const ad = Math.abs(a-fromAbs);
-          if(ad>0 && ad<bestAnyDiff){ bestAnyDiff=ad; bestAny={string:s,fret:f}; }
-        }
-      }
-    }
-    return best || bestAny;
-  }
 
   function pickNextTargetDegree(){
     const cur = degreeAt(state.current.string, state.current.fret);
-    let d;
-    do { d = 1 + Math.floor(Math.random()*7); } while(d===cur);
-    return d;
+    // Exclude the degree we're standing on and the one we just came from, so the
+    // walk can't bounce 1 → 7 → 1. Build the pool explicitly rather than
+    // reject-sampling, which would spin if the exclusions ever grew.
+    const pool = enabledDegrees().filter(d => d!==cur && d!==state.prevDegree);
+    if(!pool.length) return cur==='1' ? '2' : '1'; // defensive; never hit in practice
+    return pool[Math.floor(Math.random()*pool.length)];
   }
 
   function rootStartPosition(){
@@ -412,11 +504,25 @@
 
   function computeLayout(){
     const orientation = mq.matches ? 'vertical' : 'horizontal';
+    const wide = mqWide.matches;
+    const scroller = document.getElementById('neckScroll');
 
-    const openWidth = 56;
-    const widths = [openWidth];
+    // base fret spacing, tapering toward the body like a real neck
+    const widths = [56];
     let w = 74;
     for(let i=1;i<=FRET_COUNT;i++){ widths.push(w); w *= 0.965; }
+
+    // On wide screens, scale the whole neck so all 15 frets fit the available
+    // width — no scrolling, the entire fretboard readable at a glance. That's
+    // the point of the extra space. Narrow screens keep the scrolling neck.
+    let scale = 1;
+    if(wide && orientation==='horizontal'){
+      const avail = scroller.clientWidth;
+      const natural = widths.reduce((a,b)=>a+b, 0);
+      if(avail > 0) scale = Math.min(2.2, Math.max(1, avail / natural));
+      for(let i=0;i<widths.length;i++) widths[i] *= scale;
+    }
+
     const xStart = [0];
     for(let i=1;i<widths.length;i++) xStart.push(xStart[i-1]+widths[i-1]);
     const xCenter = widths.map((wd,i)=> xStart[i] + wd/2);
@@ -424,16 +530,19 @@
 
     // measure the actual room available for the neck's cross-axis (string spread)
     // so shrinking other UI chrome directly translates into a wider, more tappable neck
-    const scroller = document.getElementById('neckScroll');
     let measured = orientation==='vertical' ? scroller.clientWidth : scroller.clientHeight;
     if(!measured) measured = orientation==='vertical' ? 320 : 220;
-    const crossSize = Math.max(190, Math.min(measured, 340));
+    const crossSize = Math.max(190, Math.min(measured, wide ? 460 : 340));
 
-    const stringMargin = 24, wireMargin = 12, nutMargin = 8;
+    // note size follows the neck so a big board doesn't get tiny dots on it
+    const noteScale = wide ? Math.min(1.55, Math.max(1, crossSize/300)) : 1;
+
+    const stringMargin = 24*noteScale, wireMargin = 12, nutMargin = 8;
     const crossPositions = [];
     for(let i=0;i<6;i++) crossPositions.push(stringMargin + i*((crossSize-2*stringMargin)/5));
 
-    return {orientation, widths, xStart, xCenter, totalPrimary, crossSize, crossPositions, wireMargin, nutMargin};
+    return {orientation, wide, widths, xStart, xCenter, totalPrimary,
+            crossSize, crossPositions, wireMargin, nutMargin, scale, noteScale};
   }
 
   function toXY(primary, cross){
@@ -449,9 +558,14 @@
   }
 
   function buildStaticBoard(){
-    layout = computeLayout();
+    // Apply the orientation class BEFORE measuring: computeLayout() reads the
+    // scroller's client size, which changes with the flex-direction. Measuring
+    // first would size the new board from the previous orientation's dimensions.
     const wrap = document.getElementById('fretboardWrap');
-    wrap.classList.toggle('vertical', layout.orientation==='vertical');
+    wrap.classList.toggle('vertical', mq.matches);
+
+    layout = computeLayout();
+    const K = layout.noteScale;   // scale board furniture with the neck
 
     const svgW = layout.orientation==='vertical' ? layout.crossSize : layout.totalPrimary;
     const svgH = layout.orientation==='vertical' ? layout.totalPrimary : layout.crossSize;
@@ -470,13 +584,13 @@
       const p2 = toXY(layout.xStart[f], layout.crossSize-layout.wireMargin);
       svg.appendChild(el('line', {
         x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
-        stroke:'#b9afa0', 'stroke-width':1.4, opacity:.55
+        stroke:'#b9afa0', 'stroke-width':1.4*K, opacity:.55
       }));
     }
     // nut
     const n1 = toXY(2, layout.nutMargin);
     const n2 = toXY(2, layout.crossSize-layout.nutMargin);
-    svg.appendChild(el('line', {x1:n1.x, y1:n1.y, x2:n2.x, y2:n2.y, stroke:'#d9c08b', 'stroke-width':5}));
+    svg.appendChild(el('line', {x1:n1.x, y1:n1.y, x2:n2.x, y2:n2.y, stroke:'#d9c08b', 'stroke-width':5*K}));
 
     // position markers
     const singles = [3,5,7,9,15];
@@ -484,23 +598,23 @@
     singles.forEach(f=>{
       if(f>FRET_COUNT) return;
       const p = toXY(layout.xCenter[f], midCross);
-      svg.appendChild(el('circle', {cx:p.x, cy:p.y, r:3.2, fill:'#c9a15c', opacity:.35}));
+      svg.appendChild(el('circle', {cx:p.x, cy:p.y, r:3.2*K, fill:'#c9a15c', opacity:.35}));
     });
     if(FRET_COUNT>=12){
       const c1 = (layout.crossPositions[1]+layout.crossPositions[2])/2;
       const c2 = (layout.crossPositions[3]+layout.crossPositions[4])/2;
       const p1_ = toXY(layout.xCenter[12], c1);
       const p2_ = toXY(layout.xCenter[12], c2);
-      svg.appendChild(el('circle', {cx:p1_.x, cy:p1_.y, r:3.2, fill:'#c9a15c', opacity:.35}));
-      svg.appendChild(el('circle', {cx:p2_.x, cy:p2_.y, r:3.2, fill:'#c9a15c', opacity:.35}));
+      svg.appendChild(el('circle', {cx:p1_.x, cy:p1_.y, r:3.2*K, fill:'#c9a15c', opacity:.35}));
+      svg.appendChild(el('circle', {cx:p2_.x, cy:p2_.y, r:3.2*K, fill:'#c9a15c', opacity:.35}));
     }
 
     // fret numbers
     [0,3,5,7,9,12,15].forEach(f=>{
       if(f>FRET_COUNT) return;
-      const p = toXY(layout.xCenter[f], layout.crossSize-13);
+      const p = toXY(layout.xCenter[f], layout.crossSize-13*K);
       const t = el('text', {
-        x:p.x, y:p.y+3, 'text-anchor':'middle', 'font-size':9, fill:'#7a6c5b', class:'note-label'
+        x:p.x, y:p.y+3*K, 'text-anchor':'middle', 'font-size':9*K, fill:'#7a6c5b', class:'note-label'
       });
       t.textContent = f;
       svg.appendChild(t);
@@ -508,77 +622,126 @@
 
     // strings
     STRINGS.forEach((s,i)=>{
-      const thickness = 1 + (5-i)*0.35;
-      const p1s = toXY(0, layout.crossPositions[i]);
-      const p2s = toXY(layout.totalPrimary, layout.crossPositions[i]);
+      const thickness = (1 + (5-i)*0.35) * K;
+      const p1s = toXY(0, layout.crossPositions[rowOf(i)]);
+      const p2s = toXY(layout.totalPrimary, layout.crossPositions[rowOf(i)]);
       svg.appendChild(el('line', {
         x1:p1s.x, y1:p1s.y, x2:p2s.x, y2:p2s.y,
         stroke:'#e4d9c4', 'stroke-width':thickness, opacity:.85
       }));
     });
 
-    const g = el('g', {id:'notesGroup'});
-    svg.appendChild(g);
+    // Hit cells sit beneath the note graphics; both are rebuilt by renderNotes.
+    svg.appendChild(el('g', {id:'cellsGroup'}));
+    svg.appendChild(el('g', {id:'notesGroup'}));
 
-    const labelWrap = document.getElementById('stringLabels');
-    labelWrap.innerHTML = '';
-    if(layout.orientation==='vertical'){
-      labelWrap.style.width = layout.crossSize+'px';
-      labelWrap.style.height = '';
-    } else {
-      labelWrap.style.height = layout.crossSize+'px';
-      labelWrap.style.width = '';
-    }
+    // String names are drawn into their own SVG that shares the board's exact
+    // cross-axis coordinates (layout.crossPositions), so a label can never drift
+    // from its string — both are placed by the same numbers in the same units.
+    const GUTTER = 24*K;
+    const gutterSvg = document.getElementById('gutter');
+    const gW = layout.orientation==='vertical' ? layout.crossSize : GUTTER;
+    const gH = layout.orientation==='vertical' ? GUTTER : layout.crossSize;
+    gutterSvg.setAttribute('width', gW);
+    gutterSvg.setAttribute('height', gH);
+    gutterSvg.setAttribute('viewBox', `0 0 ${gW} ${gH}`);
+    gutterSvg.innerHTML = '';
+
     STRINGS.forEach((s,i)=>{
-      const span = document.createElement('span');
-      span.textContent = s.name;
-      if(layout.orientation==='vertical'){
-        span.style.left = layout.crossPositions[i]+'px';
-      } else {
-        span.style.top = layout.crossPositions[i]+'px';
-      }
-      labelWrap.appendChild(span);
+      const cp = layout.crossPositions[rowOf(i)];
+      const t = el('text', {
+        x: layout.orientation==='vertical' ? cp : GUTTER/2,
+        y: layout.orientation==='vertical' ? GUTTER-8*K : cp,
+        'text-anchor':'middle',
+        'dominant-baseline': layout.orientation==='vertical' ? 'auto' : 'central',
+        'font-size':11*K, fill:'#7a6c5b', class:'note-label'
+      });
+      t.textContent = s.name;
+      gutterSvg.appendChild(t);
     });
   }
 
+  let noteIndex = [];   // noteIndex[string][fret] -> <g> element, for flash feedback
+
+  // Every fret/string intersection gets one invisible rectangle carrying its
+  // scale degree as a data attribute. Rectangles tile the board edge to edge,
+  // so unlike circles they can never overlap however tight the string spacing
+  // gets — each point belongs to exactly one cell. The click handler just reads
+  // the attribute off whatever it hit, so the answer it validates is literally
+  // the same value that was used to draw that spot.
+  function renderCells(){
+    const cg = document.getElementById('cellsGroup');
+    cg.innerHTML = '';
+    const cp = layout.crossPositions;
+    const spacing = cp[1] - cp[0];
+
+    for(let s=0;s<6;s++){
+      const row = rowOf(s);
+      // band spans the midpoints to its neighbours; outer rows reach the edge
+      const lo = row===0 ? 0             : (cp[row-1] + cp[row]) / 2;
+      const hi = row===5 ? layout.crossSize : (cp[row] + cp[row+1]) / 2;
+
+      for(let f=0; f<=FRET_COUNT; f++){
+        const deg = degreeAt(s,f);
+        const a0 = layout.xStart[f], aLen = layout.widths[f];
+        const rect = el('rect', {
+          x: layout.orientation==='vertical' ? lo : a0,
+          y: layout.orientation==='vertical' ? a0 : lo,
+          width:  layout.orientation==='vertical' ? (hi-lo) : aLen,
+          height: layout.orientation==='vertical' ? aLen : (hi-lo),
+          fill:'transparent',
+          class:'fret-cell',
+          'data-string': s,
+          'data-fret': f,
+          'data-degree': deg===null ? '' : deg
+        });
+        cg.appendChild(rect);
+      }
+    }
+  }
+
   function renderNotes(){
+    renderCells();
     const g = document.getElementById('notesGroup');
     g.innerHTML = '';
+    noteIndex = Array.from({length:6}, ()=> new Array(FRET_COUNT+1));
     const curDeg = degreeAt(state.current.string, state.current.fret);
+    const k = layout.noteScale;
 
     for(let s=0;s<6;s++){
       for(let f=0; f<=FRET_COUNT; f++){
         const deg = degreeAt(s,f);
         const isCurrent = (deg!==null && deg===curDeg);
-        const p = toXY(layout.xCenter[f], layout.crossPositions[s]);
+        const p = toXY(layout.xCenter[f], layout.crossPositions[rowOf(s)]);
         const cx = p.x, cy = p.y;
 
-        const wrap = el('g', {class:'note-hit', 'data-s':s, 'data-f':f});
-
-        // large invisible hit area for comfortable tapping
-        wrap.appendChild(el('circle', {cx, cy, r:16, fill:'transparent'}));
+        const wrap = el('g', {});
+        noteIndex[s][f] = wrap;
 
         if(isCurrent){
-          wrap.appendChild(el('circle', {cx, cy, r:15, fill:'none', stroke:'#e8c684', 'stroke-width':2, class:'pulse'}));
+          wrap.appendChild(el('circle', {cx, cy, r:15*k, fill:'none', stroke:'#e8c684', 'stroke-width':2, class:'pulse'}));
 
-          const circle = el('circle', {cx, cy, r:12.5, fill:'#c9a15c', stroke:'#e8c684', 'stroke-width':2, class:'note-visible'});
+          const circle = el('circle', {cx, cy, r:12.5*k, fill:'#c9a15c', stroke:'#e8c684', 'stroke-width':2, class:'note-visible'});
           wrap.appendChild(circle);
 
+          const lab = DEGREE_LABEL[deg];
           const text = el('text', {
-            x:cx, y:cy+3.6, 'text-anchor':'middle', 'font-size':10.5, 'font-weight':600,
+            x:cx, y:cy+3.6*k, 'text-anchor':'middle',
+            'font-size':(lab.length>1 ? 8.8 : 10.5)*k, 'font-weight':600,
             fill:'#241a14', class:'note-label'
           });
-          text.textContent = deg;
+          text.textContent = lab;
           wrap.appendChild(text);
         } else if(deg!==null && state.noteDisplay!=='hidden'){
           // scale tone shown per the configured visibility mode
-          const circle = el('circle', {cx, cy, r:9.5, fill:'#241a14', stroke:'rgba(233,224,205,.35)', 'stroke-width':1.3, class:'note-visible'});
+          const circle = el('circle', {cx, cy, r:9.5*k, fill:'#241a14', stroke:'rgba(233,224,205,.35)', 'stroke-width':1.3, class:'note-visible'});
           wrap.appendChild(circle);
 
           if(state.noteDisplay==='numerals'){
-            const label = state.showNames ? NOTE_NAMES[pitchClassAt(s,f)] : deg;
+            const label = state.showNames ? NOTE_NAMES[pitchClassAt(s,f)] : DEGREE_LABEL[deg];
             const text = el('text', {
-              x:cx, y:cy+3.4, 'text-anchor':'middle', 'font-size':9.5, 'font-weight':500,
+              x:cx, y:cy+3.4*k, 'text-anchor':'middle',
+              'font-size':(label.length>1 ? 8 : 9.5)*k, 'font-weight':500,
               fill:'#c9bba5', class:'note-label'
             });
             text.textContent = label;
@@ -586,17 +749,29 @@
           }
         } else {
           // fully hidden: only a transparent feedback ring, revealed briefly on tap
-          const ring = el('circle', {cx, cy, r:9.5, fill:'transparent', stroke:'transparent', 'stroke-width':2.5, class:'note-visible'});
+          const ring = el('circle', {cx, cy, r:9.5*k, fill:'transparent', stroke:'transparent', 'stroke-width':2.5, class:'note-visible'});
           wrap.appendChild(ring);
         }
 
-        wrap.addEventListener('click', ()=> handleClick(s,f,wrap));
         g.appendChild(wrap);
       }
     }
   }
 
   // ---------- interaction ----------
+
+  // One delegated listener. The cell that was hit already carries its own scale
+  // degree, so validation is a direct attribute read — no coordinate maths, and
+  // no second source of truth that could drift from what's drawn.
+  document.getElementById('board').addEventListener('click', (e)=>{
+    const cell = e.target.closest('.fret-cell');
+    if(!cell) return;
+    handleClick(
+      +cell.dataset.string,
+      +cell.dataset.fret,
+      cell.dataset.degree === '' ? null : cell.dataset.degree
+    );
+  });
   let audioCtx;
   function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
   function playTone(correct){
@@ -624,7 +799,9 @@
     }catch(e){}
   }
 
-  function flashClass(node, cls){
+  function flashNote(s, f, cls){
+    const node = noteIndex[s] && noteIndex[s][f];
+    if(!node) return;
     const ring = node.querySelector('.note-visible');
     if(!ring) return;
     ring.classList.add(cls);
@@ -643,56 +820,48 @@
     }
   }
 
-  function handleClick(s,f,groupEl){
-    const deg = degreeAt(s,f);
+  function handleClick(s, f, deg){
     const curDeg = degreeAt(state.current.string, state.current.fret);
-    const isCurrentPos = (deg!==null && deg===curDeg);
-    if(isCurrentPos) return;
-    const target = findTarget(state.current.string, state.current.fret, state.targetDegree);
+    if(deg!==null && deg===curDeg) return; // tapping the note you're already on is a no-op
 
-    if(target && target.string===s && target.fret===f){
+    if(deg===state.targetDegree){
+      // any occurrence of the target degree counts — the one they picked becomes current
       playTone(true);
-      flashClass(groupEl, 'correct-flash');
+      flashNote(s, f, 'correct-flash');
       state.streak++;
       document.getElementById('streakVal').textContent = state.streak;
 
       setTimeout(()=>{
+        state.prevDegree = curDeg;   // remember where we came from
         state.current = {string:s, fret:f};
         state.targetDegree = pickNextTargetDegree();
         renderNotes();
         renderPlaques();
         centerOn(s,f);
       }, 380);
-    } else if(deg===state.targetDegree){
-      playTone(false);
-      flashClass(groupEl, 'almost-flash');
     } else {
       playTone(false);
-      flashClass(groupEl, 'wrong-flash');
+      flashNote(s, f, 'wrong-flash');
       state.streak = 0;
       document.getElementById('streakVal').textContent = 0;
     }
   }
 
-  function renderPlaques(){
-    const curDeg = degreeAt(state.current.string, state.current.fret);
-    document.getElementById('curNum').textContent = curDeg;
-    document.getElementById('curRoman').textContent = DEGREE_ROMAN[curDeg];
-    document.getElementById('tgtNum').textContent = state.targetDegree;
-    document.getElementById('tgtRoman').textContent = DEGREE_ROMAN[state.targetDegree];
+  function setPlaque(numEl, romanEl, deg){
+    const lab = DEGREE_LABEL[deg] || '';
+    numEl.textContent = lab;
+    // flats are two glyphs wide; a class (sized per breakpoint in CSS) eases the
+    // numeral back so it can't clip. em would resolve against the parent, not
+    // this element's own size, so it can't be done inline.
+    numEl.classList.toggle('wide', lab.length > 1);
+    romanEl.textContent = DEGREE_ROMAN[deg] || '';
   }
 
-  // ---------- hint ----------
-  document.getElementById('hintBtn').addEventListener('click', ()=>{
-    const target = findTarget(state.current.string, state.current.fret, state.targetDegree);
-    if(!target) return;
-    centerOn(target.string, target.fret);
-    setTimeout(()=>{
-      const g = document.getElementById('notesGroup');
-      const groupEl = Array.from(g.children).find(c => +c.getAttribute('data-s')===target.string && +c.getAttribute('data-f')===target.fret);
-      if(groupEl) flashClass(groupEl, 'hint-flash');
-    }, 350);
-  });
+  function renderPlaques(){
+    const curDeg = degreeAt(state.current.string, state.current.fret);
+    setPlaque(document.getElementById('curNum'), document.getElementById('curRoman'), curDeg);
+    setPlaque(document.getElementById('tgtNum'), document.getElementById('tgtRoman'), state.targetDegree);
+  }
 
   // ---------- settings ----------
   const keySelect = document.getElementById('keySelect');
@@ -712,12 +881,34 @@
   });
 
   const noteVisibilitySeg = document.getElementById('noteVisibilitySeg');
-  noteVisibilitySeg.querySelectorAll('.seg-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      state.noteDisplay = btn.dataset.val;
-      noteVisibilitySeg.querySelectorAll('.seg-btn').forEach(b=> b.classList.toggle('active', b===btn));
-      renderNotes();
-    });
+  noteVisibilitySeg.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.seg-btn');
+    if(!btn) return;
+    state.noteDisplay = btn.dataset.val;
+    for(const b of noteVisibilitySeg.children) b.classList.toggle('active', b===btn);
+    renderNotes();
+  });
+
+  const toggleFlats = document.getElementById('toggleFlats');
+  toggleFlats.addEventListener('click', ()=>{
+    state.includeFlats = !state.includeFlats;
+    toggleFlats.classList.toggle('on', state.includeFlats);
+
+    // Switching flats off can pull the ground out from under the run: the note
+    // you're standing on, or the one you've been asked to find, may no longer
+    // be part of the scale. Only restart when that's actually happened.
+    const curDeg = degreeAt(state.current.string, state.current.fret);
+    const targetStillValid = enabledDegrees().includes(state.targetDegree);
+    if(curDeg === null){
+      resetRun();
+      return;
+    }
+    if(!targetStillValid){
+      state.prevDegree = null;
+      state.targetDegree = pickNextTargetDegree();
+    }
+    renderNotes();
+    renderPlaques();
   });
 
   const toggleNames = document.getElementById('toggleNames');
@@ -737,6 +928,7 @@
 
   function resetRun(){
     state.current = rootStartPosition();
+    state.prevDegree = null;
     state.targetDegree = pickNextTargetDegree();
     state.streak = 0;
     document.getElementById('streakVal').textContent = 0;
@@ -747,7 +939,32 @@
   }
 
   // rebuild board if crossing the phone/desktop breakpoint (e.g. rotation, resize)
+  // Move the settings panel and streak readout between the mobile chrome
+  // (collapsible drawer + footer bar) and the desktop side rail. Moving the
+  // real nodes rather than duplicating them keeps one source of truth, and the
+  // listeners ride along since they're bound to these elements/containers.
+  function placeChrome(){
+    const drawer = document.getElementById('settingsDrawer');
+    const streak = document.getElementById('streakBox');
+    const slot   = document.getElementById('sideSlot');
+    const app    = document.querySelector('.app');
+    const stage  = document.querySelector('.stage');
+    const footer = document.getElementById('appFooter');
+
+    if(mqWide.matches){
+      slot.appendChild(drawer);
+      slot.appendChild(streak);
+      drawer.classList.add('open');   // always expanded in the rail
+    } else {
+      app.insertBefore(drawer, stage);
+      footer.appendChild(streak);
+      drawer.classList.remove('open');
+    }
+  }
+
   function handleOrientationChange(){
+    // relocate chrome first: it changes how much room the neck has to measure
+    placeChrome();
     buildStaticBoard();
     renderNotes();
     renderPlaques();
@@ -755,8 +972,10 @@
     scroller.scrollLeft = 0;
     scroller.scrollTop = 0;
   }
-  if(mq.addEventListener) mq.addEventListener('change', handleOrientationChange);
-  else mq.addListener(handleOrientationChange);
+  for(const q of [mq, mqWide]){
+    if(q.addEventListener) q.addEventListener('change', handleOrientationChange);
+    else q.addListener(handleOrientationChange);
+  }
 
   let resizeTimer;
   window.addEventListener('resize', ()=>{
@@ -768,6 +987,7 @@
   function init(){
     state.current = rootStartPosition();
     state.targetDegree = pickNextTargetDegree();
+    placeChrome();
     buildStaticBoard();
     renderNotes();
     renderPlaques();
