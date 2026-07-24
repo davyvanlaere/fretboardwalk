@@ -357,8 +357,11 @@
   function pad2(n){ return String(n).padStart(2,'0'); }
 
   let audioCtx;
+  function newAudioCtx(){
+    return new (window.AudioContext||window.webkitAudioContext)();
+  }
   function ensureAudioCtx(){
-    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if(!audioCtx) audioCtx = newAudioCtx();
     return audioCtx;
   }
 
@@ -407,8 +410,21 @@
   async function playGuitarNote(s, f, wrong){
     if(!state.soundOn) return;
     try{
-      const ctx = ensureAudioCtx();
-      if(ctx.state === 'suspended') await ctx.resume();
+      let ctx = ensureAudioCtx();
+      if(ctx.state !== 'running'){
+        // iOS Safari's AudioContext can come back from a long background/lock-
+        // screen spell stuck 'suspended' (or worse, reporting 'running' but
+        // silent) in a way resume() never actually fixes — see webkit.org
+        // bug 231105. A refresh works because that mints a fresh context, so
+        // do the same thing here: discard it and build a new one. This runs
+        // inside the tap's own click handler, which counts as the user
+        // gesture Safari requires to let the new context start unlocked.
+        try{ await ctx.resume(); }catch(e){}
+        if(ctx.state !== 'running'){
+          try{ ctx.close(); }catch(e){}
+          ctx = audioCtx = newAudioCtx();
+        }
+      }
       const buffers = await loadGuitarSamples(state.guitarType);
       const ref = nearestSampleFret(f);
       const buf = buffers[s] && buffers[s][ref];
