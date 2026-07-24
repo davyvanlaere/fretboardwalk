@@ -382,6 +382,14 @@
         <span>Sound feedback</span>
         <div class="toggle on" id="toggleSound"><div class="knob"></div></div>
       </div>
+      <div class="setting-row stack">
+        <span>Guitar sound</span>
+        <div class="segmented" id="guitarTypeSeg">
+          <button class="seg-btn active" data-val="SteelString">Steel String</button>
+          <button class="seg-btn" data-val="Classical">Classical</button>
+          <button class="seg-btn" data-val="Electric">Electric</button>
+        </div>
+      </div>
       <button class="restart-btn" id="restartBtn">RESTART FROM ROOT</button>
     </div>
   </div>
@@ -467,6 +475,7 @@
     showNames:false,
     includeFlats:false,
     soundOn:true,
+    guitarType:'SteelString',  // 'SteelString' | 'Classical' | 'Electric'
     current:{string:0, fret:0},
     prevDegree:null,
     targetDegree:'5',
@@ -765,27 +774,82 @@
     }
   }
 
-  // ---------- feedback ----------
+  // ---------- feedback: guitar sample playback ----------
+  // Real recordings only exist at the open string, 6th and 12th frets. Every
+  // other fret plays the nearest of those three, pitch-shifted by playbackRate —
+  // standard tuning means one fret is exactly one semitone, so the ratio is just
+  // 2^(semitones/12). Picking the *nearest* anchor keeps the shift small (at most
+  // 3 semitones) so it stays convincing instead of chipmunk/demonic at the edges.
+  const SAMPLE_FRETS = [0, 6, 12];
+  function nearestSampleFret(f){
+    if(f <= 3) return 0;
+    if(f <= 9) return 6;
+    return 12;
+  }
+  function pad2(n){ return String(n).padStart(2,'0'); }
+
   let audioCtx;
-  function playTone(correct){
+  function ensureAudioCtx(){
+    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  // One entry per guitar type: {promise, buffers} where buffers[string][fret] is
+  // a decoded AudioBuffer. Cached so switching guitars twice doesn't re-fetch,
+  // and so playback can just await a promise that's almost always already settled.
+  const sampleCache = {};
+  function loadGuitarSamples(type){
+    if(sampleCache[type]) return sampleCache[type].promise;
+    const ctx = ensureAudioCtx();
+    const buffers = Array.from({length:6}, ()=>({}));
+    const jobs = [];
+    for(let s=0; s<6; s++){
+      for(const f of SAMPLE_FRETS){
+        const url = `res/samples/${type}/S${pad2(s)}-F${pad2(f)}.wav`;
+        jobs.push(
+          fetch(url)
+            .then(r=>r.arrayBuffer())
+            .then(ab=>ctx.decodeAudioData(ab))
+            .then(buf=>{ buffers[s][f]=buf; })
+            .catch(()=>{})
+        );
+      }
+    }
+    const promise = Promise.all(jobs).then(()=>buffers);
+    sampleCache[type] = {promise, buffers};
+    return promise;
+  }
+
+  // Plays the real note at (s,f). `wrong` layers a short, quiet error blip on
+  // top rather than replacing the note, so a miss still tells you what you
+  // actually played.
+  async function playGuitarNote(s, f, wrong){
     if(!state.soundOn) return;
     try{
-      if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-      const ctx = audioCtx, now = ctx.currentTime;
-      const o = ctx.createOscillator(), gn = ctx.createGain();
-      o.connect(gn); gn.connect(ctx.destination);
-      o.type = 'sine';
-      if(correct){
-        o.frequency.setValueAtTime(523, now);
-        o.frequency.setValueAtTime(784, now+0.075);
-        gn.gain.setValueAtTime(0.13, now);
-        gn.gain.exponentialRampToValueAtTime(0.001, now+0.3);
-        o.start(now); o.stop(now+0.32);
-      } else {
-        o.frequency.setValueAtTime(150, now);
-        gn.gain.setValueAtTime(0.09, now);
-        gn.gain.exponentialRampToValueAtTime(0.001, now+0.2);
-        o.start(now); o.stop(now+0.22);
+      const ctx = ensureAudioCtx();
+      if(ctx.state === 'suspended') ctx.resume();
+      const buffers = await loadGuitarSamples(state.guitarType);
+      const ref = nearestSampleFret(f);
+      const buf = buffers[s] && buffers[s][ref];
+      if(!buf) return;
+      const now = ctx.currentTime;
+
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = Math.pow(2, (f-ref)/12);
+      const gain = ctx.createGain();
+      gain.gain.value = 0.85;
+      src.connect(gain); gain.connect(ctx.destination);
+      src.start(now);
+
+      if(wrong){
+        const o = ctx.createOscillator(), gn = ctx.createGain();
+        o.type = 'square';
+        o.frequency.setValueAtTime(140, now);
+        gn.gain.setValueAtTime(0.05, now);
+        gn.gain.exponentialRampToValueAtTime(0.001, now+0.16);
+        o.connect(gn); gn.connect(ctx.destination);
+        o.start(now); o.stop(now+0.18);
       }
     }catch(e){}
   }
@@ -830,8 +894,10 @@
     const curDeg = degreeAt(state.current.string, state.current.fret);
     if(deg !== null && deg === curDeg) return;   // already standing here
 
-    if(deg === state.targetDegree){
-      playTone(true);
+    const isCorrect = deg === state.targetDegree;
+    playGuitarNote(s, f, !isCorrect);
+
+    if(isCorrect){
       flashNote(s, f, 'correct-flash');
       setStreak(state.streak + 1);
       setTimeout(()=>{
@@ -843,7 +909,6 @@
         centerOn(s,f);
       }, 380);
     } else {
-      playTone(false);
       flashNote(s, f, 'wrong-flash');
       setStreak(0);
     }
@@ -921,6 +986,15 @@
     toggleSound.classList.toggle('on', state.soundOn);
   });
 
+  const guitarTypeSeg = document.getElementById('guitarTypeSeg');
+  guitarTypeSeg.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.seg-btn');
+    if(!btn || btn.dataset.val === state.guitarType) return;
+    state.guitarType = btn.dataset.val;
+    for(const b of guitarTypeSeg.children) b.classList.toggle('active', b===btn);
+    loadGuitarSamples(state.guitarType);
+  });
+
   document.getElementById('restartBtn').addEventListener('click', resetRun);
 
   function resetRun(){
@@ -982,6 +1056,7 @@
   }catch(e){}
 
   // ---------- init ----------
+  loadGuitarSamples(state.guitarType);   // fire and forget: warms the cache before the first click
   state.current = rootStartPosition();
   state.targetDegree = pickNextTargetDegree();
   placeChrome();
