@@ -140,6 +140,11 @@
 
   /* ---------------- settings ---------------- */
   .settings{
+    /* .app is a column flex container, and its children default to shrinkable.
+       Without pinning this, a short phone viewport squeezes the drawer down
+       from its max-height instead of the scrollable neck below it, clipping
+       the settings list to a sliver. */
+    flex:0 0 auto;
     max-height:0; overflow:hidden; transition:max-height .26s ease;
     background:var(--panel-2); border-bottom:1px solid var(--line);
   }
