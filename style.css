@@ -1,0 +1,331 @@
+  :root{
+    /* Cool graphite + LED accents: reads like rack gear rather than parchment. */
+    --bg:#0a0c10;
+    --panel:#12161c;
+    --panel-2:#1a1f27;
+    --panel-3:#232a34;
+    --line:rgba(255,255,255,.07);
+    --line-strong:rgba(255,255,255,.13);
+
+    --text:#e9eef4;
+    --muted:#8fa0b2;
+    --dim:#5a6979;
+
+    --live:#22d3ee;          /* where you are */
+    --live-deep:#0891b2;
+    --seek:#fbbf24;          /* what to find */
+    --seek-deep:#b45309;
+    --miss:#fb7185;
+
+    --neck:#161b22;
+    --neck-edge:#0e1218;
+    --fretwire:#78899a;
+    --string:#c3cfdb;
+    --inlay:#3a4553;
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100dvh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:
+      radial-gradient(ellipse 780px 420px at 50% 0%, #141a22 0%, transparent 62%),
+      linear-gradient(180deg, #0a0c10 0%, #06080b 100%);
+    font-family:'Space Grotesk', system-ui, sans-serif;
+    color:var(--text);
+    overscroll-behavior:none;
+  }
+
+  .app{
+    width:100%;
+    max-width:470px;
+    height:100dvh;
+    max-height:920px;
+    background:var(--bg);
+    display:flex;
+    flex-direction:column;
+    border-radius:22px;
+    overflow:hidden;
+    border:1px solid var(--line);
+    box-shadow:0 30px 90px rgba(0,0,0,.6);
+    position:relative;
+  }
+
+  .stage{ flex:1 1 auto; display:flex; flex-direction:column; min-height:0; min-width:0; }
+  .side{ flex:0 0 auto; display:flex; flex-direction:column; min-width:0; }
+  .side-slot{ display:none; }
+
+  @media (max-width:600px), (orientation:portrait) and (max-width:900px){
+    body{ background:#06080b; }
+    .app{
+      max-width:100%; width:100vw; height:100dvh; max-height:none;
+      border-radius:0; border:none; box-shadow:none;
+    }
+  }
+
+  /* ---------------- header ---------------- */
+  header{
+    flex:0 0 auto;
+    padding:calc(12px + env(safe-area-inset-top)) 14px 12px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{ display:flex; align-items:center; gap:9px; min-width:0; }
+  .logo{
+    width:26px; height:26px; flex:0 0 auto; border-radius:7px;
+    background:linear-gradient(145deg, var(--live), var(--live-deep));
+    display:flex; align-items:center; justify-content:center;
+    color:#04212a;
+  }
+  .logo svg{ width:19px; height:19px; display:block; }
+  .brand h1{
+    font-size:16px; font-weight:600; letter-spacing:-.015em; margin:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .header-right{ display:flex; align-items:center; gap:7px; flex:0 0 auto; }
+
+  /* streak now lives up here, so the board keeps the vertical space */
+  .streak{
+    display:flex; align-items:baseline; gap:5px;
+    background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; padding:6px 9px;
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .streak .v{ font-size:13px; font-weight:600; color:var(--text); line-height:1; }
+  .streak .l{ font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+  .streak.hot .v{ color:var(--live); }
+
+  .key-select{ position:relative; }
+  .key-select select{
+    appearance:none; -webkit-appearance:none;
+    background:var(--panel-2); border:1px solid var(--line);
+    color:var(--text); font-family:'IBM Plex Mono', monospace; font-size:12px;
+    padding:7px 24px 7px 10px; border-radius:8px; cursor:pointer;
+  }
+  .key-select::after{
+    content:''; position:absolute; right:9px; top:50%;
+    width:5px; height:5px; margin-top:-4px;
+    border-right:1.5px solid var(--muted); border-bottom:1.5px solid var(--muted);
+    transform:rotate(45deg); pointer-events:none;
+  }
+  .gear-btn{
+    width:32px; height:32px; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; cursor:pointer;
+  }
+  .gear-btn span{
+    display:block; width:14px; height:1.5px; background:var(--muted);
+    box-shadow:0 -4.5px 0 var(--muted), 0 4.5px 0 var(--muted);
+  }
+
+  /* ---------------- settings ---------------- */
+  .settings{
+    /* .app is a column flex container, and its children default to shrinkable.
+       Without pinning this, a short phone viewport squeezes the drawer down
+       from its max-height instead of the scrollable neck below it, clipping
+       the settings list to a sliver. */
+    flex:0 0 auto;
+    max-height:0; overflow:hidden; transition:max-height .26s ease;
+    background:var(--panel-2); border-bottom:1px solid var(--line);
+  }
+  .settings.open{ max-height:340px; }
+  .settings-inner{ padding:14px 16px 16px; display:flex; flex-direction:column; gap:14px; }
+  .setting-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    font-size:13px; color:var(--muted);
+  }
+  .setting-row.stack{ flex-direction:column; align-items:stretch; gap:8px; }
+
+  .segmented{
+    display:flex; background:var(--bg); border:1px solid var(--line);
+    border-radius:9px; padding:3px; gap:3px;
+  }
+  .seg-btn{
+    flex:1; background:transparent; border:none; color:var(--muted);
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    padding:8px 4px; border-radius:6px; cursor:pointer;
+  }
+  .seg-btn.active{ background:var(--live); color:#04212a; font-weight:600; }
+
+  .toggle{
+    width:40px; height:23px; flex:0 0 auto; position:relative; cursor:pointer;
+    background:var(--panel-3); border:1px solid var(--line); border-radius:20px;
+    transition:background .18s;
+  }
+  .toggle.on{ background:var(--live); border-color:var(--live); }
+  .toggle .knob{
+    position:absolute; top:2px; left:2px; width:17px; height:17px;
+    background:var(--muted); border-radius:50%; transition:left .18s, background .18s;
+  }
+  .toggle.on .knob{ left:19px; background:#04212a; }
+
+  .restart-btn{
+    background:transparent; border:1px solid var(--line-strong); color:var(--muted);
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    padding:9px 12px; border-radius:8px; cursor:pointer; letter-spacing:.04em;
+  }
+  .restart-btn:active{ background:var(--panel-3); }
+
+  /* ---------------- readouts ---------------- */
+  .plaques{ flex:0 0 auto; display:flex; padding:12px 14px 10px; gap:10px; }
+  .plaque{
+    flex:1; position:relative; text-align:center;
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; padding:9px 10px 11px;
+  }
+  .plaque::before{
+    content:''; position:absolute; left:12px; right:12px; top:0; height:2px;
+    border-radius:0 0 3px 3px;
+  }
+  .plaque.current::before{ background:var(--live); }
+  .plaque.target::before{ background:var(--seek); }
+  .plaque .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--dim); margin-bottom:3px;
+  }
+  .plaque .num{ font-size:30px; font-weight:600; line-height:1.05; letter-spacing:-.02em; }
+  .plaque .num.wide{ font-size:25px; }
+  .plaque .roman{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    color:var(--dim); margin-top:2px;
+  }
+  .plaque.current .num{ color:var(--live); }
+  .plaque.target .num{ color:var(--seek); }
+
+  /* ---------------- fretboard ---------------- */
+  .board-area{ flex:1 1 auto; display:flex; min-height:0; min-width:0; padding:0 0 10px; }
+  .fretboard-wrap{ display:flex; flex:1; min-height:0; min-width:0; }
+  .fretboard-wrap.vertical{ flex-direction:column; }
+
+  .string-labels{ display:flex; flex:0 0 auto; align-items:center; }
+  .fretboard-wrap.vertical .string-labels{ justify-content:center; align-items:flex-start; }
+  svg#gutter{ display:block; }
+
+  .neck-scroll{
+    flex:1 1 auto; min-height:0; min-width:0;
+    overflow-x:auto; overflow-y:hidden;
+    -webkit-overflow-scrolling:touch; scrollbar-width:none;
+  }
+  /* Horizontal neck centres inside a full-height scroller. The scroller keeps a
+     definite height so crossSize can be measured from it; centring the wrap
+     itself would make the height depend on the SVG derived from that height. */
+  .fretboard-wrap:not(.vertical) .neck-scroll{ display:flex; align-items:center; }
+  .fretboard-wrap.vertical .neck-scroll{ overflow-x:hidden; overflow-y:auto; }
+  .neck-scroll::-webkit-scrollbar{ display:none; }
+
+  svg#board{ display:block; flex:0 0 auto; touch-action:pan-x; }
+  .fretboard-wrap.vertical svg#board{ touch-action:pan-y; margin:0 auto; }
+
+  /* Strict split: #cellsGroup is the only interactive layer. Anything painted
+     above it is decoration and must never take a click — the note circles sit
+     exactly on the strings, so if they receive events the strings go dead and
+     only the gaps between them stay clickable. */
+  #notesGroup{ pointer-events:none; }
+  .fret-cell{ cursor:pointer; }
+  .note-label{ font-family:'IBM Plex Mono', monospace; pointer-events:none; user-select:none; }
+  .note-visible{ transition:r .14s, fill .14s, stroke .14s; }
+
+  @keyframes halo{
+    0%{ opacity:.5; }
+    100%{ opacity:0; transform:scale(1.85); }
+  }
+  .pulse{ animation:halo 1.7s ease-out infinite; transform-origin:center; transform-box:fill-box; }
+
+  @keyframes bad{
+    0%,100%{ stroke:var(--miss); stroke-width:2.5; }
+    50%{ stroke:var(--miss); stroke-width:5; }
+  }
+  .wrong-flash{ animation:bad .34s ease-in-out 2; }
+
+  @keyframes good{
+    0%,100%{ stroke:var(--live); stroke-width:2.5; }
+    50%{ stroke:var(--live); stroke-width:6; }
+  }
+  .correct-flash{ animation:good .3s ease-in-out 2; }
+
+  /* ---------------- rotate lock ---------------- */
+  /* Web pages can't truly lock orientation outside fullscreen, so a phone turned
+     sideways gets an explicit prompt instead of a broken layout. Scoped to
+     coarse pointers and short viewports so desktop windows never trip it. */
+  .rotate-lock{ display:none; }
+  @media (orientation:landscape) and (max-height:520px) and (pointer:coarse){
+    .app{ display:none; }
+    .rotate-lock{
+      display:flex; position:fixed; inset:0; z-index:50;
+      flex-direction:column; align-items:center; justify-content:center;
+      gap:16px; padding:24px; text-align:center; background:var(--bg);
+    }
+    .rotate-lock .icon{
+      width:44px; height:64px; border:2px solid var(--live); border-radius:8px;
+      position:relative; animation:tip 2.2s ease-in-out infinite;
+    }
+    .rotate-lock .icon::after{
+      content:''; position:absolute; left:50%; bottom:5px; transform:translateX(-50%);
+      width:14px; height:2px; background:var(--live); border-radius:2px;
+    }
+    .rotate-lock h2{ font-size:17px; font-weight:600; margin:0; }
+    .rotate-lock p{ font-size:13px; color:var(--muted); margin:0; max-width:280px; line-height:1.5; }
+  }
+  @keyframes tip{
+    0%,45%,100%{ transform:rotate(0deg); }
+    60%,85%{ transform:rotate(-90deg); }
+  }
+
+  /* ================= WIDE SCREENS ================= */
+  @media (min-width:1000px){
+    body{ padding:30px; }
+    .app{ max-width:1500px; max-height:840px; height:calc(100dvh - 60px); border-radius:16px; }
+
+    header{ padding:16px 24px; }
+    .brand h1{ font-size:19px; }
+    .logo{ width:30px; height:30px; }
+    .logo svg{ width:22px; height:22px; }
+    .gear-btn{ display:none; }
+    .key-select select{ font-size:13px; padding:9px 28px 9px 12px; }
+    .streak{ padding:8px 12px; }
+    .streak .v{ font-size:15px; }
+
+    .stage{ flex-direction:row; }
+
+    .side{
+      flex:0 0 292px; padding:22px; gap:20px;
+      border-right:1px solid var(--line);
+      background:linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+      overflow-y:auto; scrollbar-width:none;
+    }
+    .side::-webkit-scrollbar{ display:none; }
+
+    .plaques{ flex-direction:column; padding:0; gap:12px; }
+    .plaque{ padding:16px 18px 18px; border-radius:14px; }
+    .plaque .eyebrow{ font-size:10px; margin-bottom:6px; }
+    .plaque .num{ font-size:70px; }
+    .plaque .num.wide{ font-size:54px; }
+    .plaque .roman{ font-size:13px; margin-top:4px; }
+
+    .side-slot{ display:flex; flex-direction:column; gap:20px; }
+    .side .settings{
+      max-height:none; overflow:visible; background:transparent;
+      border:none; border-top:1px solid var(--line);
+    }
+    .side .settings-inner{ padding:18px 0 0; gap:16px; }
+    .side .setting-row{ font-size:12.5px; }
+    .side .restart-btn{ width:100%; text-align:center; }
+
+    .board-area{ padding:18px 24px; }
+  }
+
+  @media (min-width:1000px) and (max-width:1279px){
+    body{ padding:18px; }
+    .app{ height:calc(100dvh - 36px); }
+    .side{ flex:0 0 228px; padding:18px 16px; gap:15px; }
+    .plaque{ padding:12px 14px 14px; }
+    .plaque .num{ font-size:50px; }
+    .plaque .num.wide{ font-size:40px; }
+    .board-area{ padding:14px 18px; }
+  }
