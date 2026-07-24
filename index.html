@@ -345,6 +345,15 @@
   }
 </style>
 </head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WL72320DHV"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-WL72320DHV');
+</script>
 <body>
 
 <div class="app">
@@ -895,6 +904,10 @@
                 cell.dataset.degree === '' ? null : cell.dataset.degree);
   });
 
+  function trackEvent(name, params){
+    if(typeof gtag === 'function') gtag('event', name, params);
+  }
+
   function handleClick(s, f, deg){
     const curDeg = degreeAt(state.current.string, state.current.fret);
     if(deg !== null && deg === curDeg) return;   // already standing here
@@ -903,6 +916,7 @@
     playGuitarNote(s, f, !isCorrect);
 
     if(isCorrect){
+      trackEvent('CorrectClick', {degree: deg});
       flashNote(s, f, 'correct-flash');
       setStreak(state.streak + 1);
       setTimeout(()=>{
@@ -914,6 +928,7 @@
         centerOn(s,f);
       }, 380);
     } else {
+      trackEvent('WrongClick', {degree: deg, target: state.targetDegree});
       flashNote(s, f, 'wrong-flash');
       setStreak(0);
     }
@@ -951,12 +966,14 @@
     document.getElementById('settingsDrawer').classList.toggle('open');
   });
 
+  const NOTE_DISPLAY_EVENT = {numerals:'SwitchNumerals', dots:'SwitchDots', hidden:'SwitchHidden'};
   const noteVisibilitySeg = document.getElementById('noteVisibilitySeg');
   noteVisibilitySeg.addEventListener('click', (e)=>{
     const btn = e.target.closest('.seg-btn');
     if(!btn) return;
     state.noteDisplay = btn.dataset.val;
     for(const b of noteVisibilitySeg.children) b.classList.toggle('active', b===btn);
+    trackEvent(NOTE_DISPLAY_EVENT[state.noteDisplay]);
     renderNotes();
   });
 
