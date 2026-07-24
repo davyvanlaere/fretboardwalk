@@ -46,6 +46,7 @@
     guitarType:'SteelString',  // 'SteelString' | 'Classical' | 'Electric'
     current:{string:0, fret:0},
     prevDegree:null,
+    prevDegree2:null,
     targetDegree:'5',
     streak:0,
   };
@@ -86,10 +87,10 @@
   function pickNextTargetDegree(){
     const cur = degreeAt(state.current.string, state.current.fret);
     // Skip anything within a tone of where you are — those sit right under the
-    // hand and don't test anything. Also skip the degree just left, so the walk
-    // can't bounce A→B→A.
+    // hand and don't test anything. Also skip the last two degrees visited, so
+    // the walk can't bounce A→B→A or settle into a 3-note loop like A→B→C→A.
     let pool = enabledDegrees().filter(d =>
-      d !== cur && d !== state.prevDegree &&
+      d !== cur && d !== state.prevDegree && d !== state.prevDegree2 &&
       (cur === null || semitoneGap(cur, d) > NEAR_SEMITONES)
     );
     // relax rather than fail if a narrow configuration ever empties the pool
@@ -179,32 +180,38 @@
     svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
     svg.innerHTML = '';
 
-    svg.appendChild(el('rect', {x:0, y:0, width:svgW, height:svgH, fill:'var(--neck)'}));
+    // Every piece below is collected into one fragment and attached to the SVG
+    // once at the end, instead of each element triggering its own insertion
+    // into the live tree — cheap everywhere, but it matters most on slow
+    // devices where connected-DOM mutations are the expensive part.
+    const frag = document.createDocumentFragment();
+
+    frag.appendChild(el('rect', {x:0, y:0, width:svgW, height:svgH, fill:'var(--neck)'}));
 
     for(let f=1; f<=FRET_COUNT; f++){
       const p1 = toXY(layout.xStart[f], layout.wireMargin);
       const p2 = toXY(layout.xStart[f], layout.crossSize - layout.wireMargin);
-      svg.appendChild(el('line', {x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
+      frag.appendChild(el('line', {x1:p1.x, y1:p1.y, x2:p2.x, y2:p2.y,
         stroke:'var(--fretwire)', 'stroke-width':1.4*K, opacity:.5}));
     }
 
     const n1 = toXY(2, layout.nutMargin);
     const n2 = toXY(2, layout.crossSize - layout.nutMargin);
-    svg.appendChild(el('line', {x1:n1.x, y1:n1.y, x2:n2.x, y2:n2.y,
+    frag.appendChild(el('line', {x1:n1.x, y1:n1.y, x2:n2.x, y2:n2.y,
       stroke:'var(--string)', 'stroke-width':5*K, opacity:.85}));
 
     const midCross = (layout.crossPositions[2] + layout.crossPositions[3]) / 2;
     [3,5,7,9,15].forEach(f=>{
       if(f > FRET_COUNT) return;
       const p = toXY(layout.xCenter[f], midCross);
-      svg.appendChild(el('circle', {cx:p.x, cy:p.y, r:3.4*K, fill:'var(--inlay)'}));
+      frag.appendChild(el('circle', {cx:p.x, cy:p.y, r:3.4*K, fill:'var(--inlay)'}));
     });
     if(FRET_COUNT >= 12){
       const c1 = (layout.crossPositions[1] + layout.crossPositions[2]) / 2;
       const c2 = (layout.crossPositions[3] + layout.crossPositions[4]) / 2;
       const a = toXY(layout.xCenter[12], c1), b = toXY(layout.xCenter[12], c2);
-      svg.appendChild(el('circle', {cx:a.x, cy:a.y, r:3.4*K, fill:'var(--inlay)'}));
-      svg.appendChild(el('circle', {cx:b.x, cy:b.y, r:3.4*K, fill:'var(--inlay)'}));
+      frag.appendChild(el('circle', {cx:a.x, cy:a.y, r:3.4*K, fill:'var(--inlay)'}));
+      frag.appendChild(el('circle', {cx:b.x, cy:b.y, r:3.4*K, fill:'var(--inlay)'}));
     }
 
     [0,3,5,7,9,12,15].forEach(f=>{
@@ -213,20 +220,23 @@
       const t = el('text', {x:p.x, y:p.y + 3*K, 'text-anchor':'middle',
         'font-size':9.5*K, fill:'var(--dim)', class:'note-label'});
       t.textContent = f;
-      svg.appendChild(t);
+      frag.appendChild(t);
     });
 
     STRINGS.forEach((s,i)=>{
       const thickness = (1 + (5-i)*0.36) * K;
       const p1s = toXY(0, layout.crossPositions[rowOf(i)]);
       const p2s = toXY(layout.totalPrimary, layout.crossPositions[rowOf(i)]);
-      svg.appendChild(el('line', {x1:p1s.x, y1:p1s.y, x2:p2s.x, y2:p2s.y,
+      frag.appendChild(el('line', {x1:p1s.x, y1:p1s.y, x2:p2s.x, y2:p2s.y,
         stroke:'var(--string)', 'stroke-width':thickness, opacity:.8}));
     });
 
-    // Hit cells sit beneath the note graphics; both are rebuilt by renderNotes.
-    svg.appendChild(el('g', {id:'cellsGroup'}));
-    svg.appendChild(el('g', {id:'notesGroup'}));
+    // Hit cells sit beneath the note graphics; both are populated separately
+    // (renderCells/renderNotes) since they refresh on different triggers.
+    frag.appendChild(el('g', {id:'cellsGroup'}));
+    frag.appendChild(el('g', {id:'notesGroup'}));
+
+    svg.appendChild(frag);
 
     // String names live in their own SVG sharing the board's exact cross-axis
     // coordinates, so a label can never drift from its string.
@@ -239,6 +249,7 @@
     gutterSvg.setAttribute('viewBox', `0 0 ${gW} ${gH}`);
     gutterSvg.innerHTML = '';
 
+    const gutterFrag = document.createDocumentFragment();
     STRINGS.forEach((s,i)=>{
       const cp = layout.crossPositions[rowOf(i)];
       const t = el('text', {
@@ -249,8 +260,9 @@
         'font-size':11.5*K, fill:'var(--dim)', class:'note-label'
       });
       t.textContent = s.name;
-      gutterSvg.appendChild(t);
+      gutterFrag.appendChild(t);
     });
+    gutterSvg.appendChild(gutterFrag);
   }
 
   // ---------- note + cell rendering ----------
@@ -265,6 +277,7 @@
     const cg = document.getElementById('cellsGroup');
     cg.innerHTML = '';
     const cp = layout.crossPositions;
+    const frag = document.createDocumentFragment();
 
     for(let s=0;s<6;s++){
       const row = rowOf(s);
@@ -274,7 +287,7 @@
       for(let f=0; f<=FRET_COUNT; f++){
         const deg = degreeAt(s,f);
         const a0 = layout.xStart[f], aLen = layout.widths[f];
-        cg.appendChild(el('rect', {
+        frag.appendChild(el('rect', {
           x: layout.orientation==='vertical' ? lo : a0,
           y: layout.orientation==='vertical' ? a0 : lo,
           width:  layout.orientation==='vertical' ? (hi-lo) : aLen,
@@ -284,12 +297,18 @@
         }));
       }
     }
+    cg.appendChild(frag);
   }
 
+  // Cell hit-regions (renderCells) aren't rebuilt here: their degree mapping
+  // only depends on the key/flats setting and layout, none of which change on
+  // a normal move, so callers ask for it explicitly when one of those does
+  // (key change, flats toggle, resize/orientation, init) instead of paying to
+  // regenerate 96 identical rects on every single correct tap.
   function renderNotes(){
-    renderCells();
     const g = document.getElementById('notesGroup');
     g.innerHTML = '';
+    const frag = document.createDocumentFragment();
     noteIndex = Array.from({length:6}, ()=> new Array(FRET_COUNT+1));
 
     const curDeg = degreeAt(state.current.string, state.current.fret);
@@ -337,9 +356,10 @@
             stroke:'transparent', 'stroke-width':2.5, class:'note-visible'}));
         }
 
-        g.appendChild(wrap);
+        frag.appendChild(wrap);
       }
     }
+    g.appendChild(frag);
   }
 
   // ---------- feedback: guitar sample playback ----------
@@ -503,6 +523,7 @@
       flashNote(s, f, 'correct-flash');
       setStreak(state.streak + 1);
       setTimeout(()=>{
+        state.prevDegree2 = state.prevDegree;
         state.prevDegree = curDeg;
         state.current = {string:s, fret:f};
         state.targetDegree = pickNextTargetDegree();
@@ -572,8 +593,10 @@
     if(curDeg === null){ resetRun(); return; }
     if(!enabledDegrees().includes(state.targetDegree)){
       state.prevDegree = null;
+      state.prevDegree2 = null;
       state.targetDegree = pickNextTargetDegree();
     }
+    renderCells();   // degree-per-cell mapping just changed
     renderNotes();
     renderPlaques();
   });
@@ -605,8 +628,10 @@
   function resetRun(){
     state.current = rootStartPosition();
     state.prevDegree = null;
+    state.prevDegree2 = null;
     state.targetDegree = pickNextTargetDegree();
     setStreak(0);
+    renderCells();   // covers the key-change path; a no-op cost otherwise since this only runs on manual restart/key-change, never mid-game
     renderNotes();
     renderPlaques();
     document.getElementById('neckScroll').scrollTo({left:0, top:0, behavior:'smooth'});
@@ -634,6 +659,7 @@
   function rebuild(){
     placeChrome();          // changes how much room the neck has, so do it first
     buildStaticBoard();
+    renderCells();          // layout just changed, so cell geometry has too
     renderNotes();
     renderPlaques();
     const scroller = document.getElementById('neckScroll');
@@ -666,6 +692,7 @@
   state.targetDegree = pickNextTargetDegree();
   placeChrome();
   buildStaticBoard();
+  renderCells();
   renderNotes();
   renderPlaques();
 
