@@ -235,7 +235,7 @@
     0%{ opacity:.5; }
     100%{ opacity:0; transform:scale(1.85); }
   }
-  .pulse{ animation:halo 1.7s ease-out infinite; transform-origin:center; transform-box:fill-box; }
+  .pulse{ animation:halo 1.7s ease-out infinite; transform-origin:center; transform-box:fill-box; will-change:transform,opacity; }
 
   @keyframes bad{
     0%,100%{ stroke:var(--miss); stroke-width:2.5; }

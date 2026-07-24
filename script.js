@@ -36,6 +36,29 @@
   const FRET_COUNT = 15;
   const NEAR_SEMITONES = 2;   // degrees this close to current are too easy to ask for
 
+  // ---------- cached DOM refs ----------
+  // Looked up once since these nodes are never replaced (only their attributes/
+  // contents change), so hot render paths don't re-walk the DOM by id each call.
+  const boardEl         = document.getElementById('board');
+  const gutterEl        = document.getElementById('gutter');
+  const neckScrollEl    = document.getElementById('neckScroll');
+  const fretboardWrapEl = document.getElementById('fretboardWrap');
+  const streakValEl     = document.getElementById('streakVal');
+  const streakBoxEl     = document.getElementById('streakBox');
+  const curNumEl        = document.getElementById('curNum');
+  const curRomanEl      = document.getElementById('curRoman');
+  const tgtNumEl        = document.getElementById('tgtNum');
+  const tgtRomanEl      = document.getElementById('tgtRoman');
+  const gearBtnEl       = document.getElementById('gearBtn');
+  const settingsDrawerEl= document.getElementById('settingsDrawer');
+  const restartBtnEl    = document.getElementById('restartBtn');
+  const sideSlotEl      = document.getElementById('sideSlot');
+
+  // cellsGroup/notesGroup are recreated from scratch by buildStaticBoard on
+  // every layout change, so these two get reassigned there instead of cached
+  // once — everything else above is a fixed node for the page's lifetime.
+  let cellsGroupEl, notesGroupEl;
+
   // ---------- state ----------
   let state = {
     keyIndex:0,
@@ -50,6 +73,48 @@
     targetDegree:'5',
     streak:0,
   };
+
+  // ---------- settings persistence ----------
+  // Only the user-facing preferences persist across visits — not the run in
+  // progress (current position, streak, target), which should always start
+  // fresh. localStorage can throw (Safari private browsing, storage disabled),
+  // so both directions are best-effort: a failure just means settings don't
+  // stick, not a broken app.
+  const SETTINGS_KEY = 'fretboardwalk.settings';
+
+  function loadSettings(){
+    try{
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if(!raw) return;
+      const saved = JSON.parse(raw);
+      // Validated field-by-field rather than merged wholesale: a stale or
+      // hand-edited value (e.g. an out-of-range keyIndex) would otherwise
+      // throw deep inside init with no try/catch to catch it there.
+      if(typeof saved.keyIndex === 'number' && saved.keyIndex >= 0 && saved.keyIndex < KEYS.length){
+        state.keyIndex = saved.keyIndex;
+      }
+      if(['numerals','dots','hidden'].includes(saved.noteDisplay)) state.noteDisplay = saved.noteDisplay;
+      if(typeof saved.showNames === 'boolean') state.showNames = saved.showNames;
+      if(typeof saved.includeFlats === 'boolean') state.includeFlats = saved.includeFlats;
+      if(typeof saved.soundOn === 'boolean') state.soundOn = saved.soundOn;
+      if(['SteelString','Classical','Electric'].includes(saved.guitarType)) state.guitarType = saved.guitarType;
+    }catch(e){}
+  }
+
+  function saveSettings(){
+    try{
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        keyIndex: state.keyIndex,
+        noteDisplay: state.noteDisplay,
+        showNames: state.showNames,
+        includeFlats: state.includeFlats,
+        soundOn: state.soundOn,
+        guitarType: state.guitarType,
+      }));
+    }catch(e){}
+  }
+
+  loadSettings();
 
   // Neck runs vertically on phones and tablets (a neck is long and thin, so it
   // suits the tall axis); horizontal only at true desktop widths. Wide screens
@@ -113,7 +178,7 @@
   function computeLayout(){
     const orientation = mq.matches ? 'vertical' : 'horizontal';
     const wide = mqWide.matches;
-    const scroller = document.getElementById('neckScroll');
+    const scroller = neckScrollEl;
 
     const widths = [58];
     let w = 76;
@@ -166,7 +231,7 @@
     // Apply the orientation class BEFORE measuring: computeLayout reads the
     // scroller's client size, which changes with flex-direction. Measuring first
     // would size the new board from the previous orientation's dimensions.
-    document.getElementById('fretboardWrap').classList.toggle('vertical', mq.matches);
+    fretboardWrapEl.classList.toggle('vertical', mq.matches);
 
     layout = computeLayout();
     const K = layout.noteScale;
@@ -174,7 +239,7 @@
     const svgW = layout.orientation==='vertical' ? layout.crossSize : layout.totalPrimary;
     const svgH = layout.orientation==='vertical' ? layout.totalPrimary : layout.crossSize;
 
-    const svg = document.getElementById('board');
+    const svg = boardEl;
     svg.setAttribute('width', svgW);
     svg.setAttribute('height', svgH);
     svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
@@ -232,16 +297,20 @@
     });
 
     // Hit cells sit beneath the note graphics; both are populated separately
-    // (renderCells/renderNotes) since they refresh on different triggers.
-    frag.appendChild(el('g', {id:'cellsGroup'}));
-    frag.appendChild(el('g', {id:'notesGroup'}));
+    // (renderCells/renderNotes) since they refresh on different triggers. Kept
+    // as direct references (not re-queried by id later) since these two nodes
+    // are recreated fresh right here every time this function runs.
+    cellsGroupEl = el('g', {id:'cellsGroup'});
+    notesGroupEl = el('g', {id:'notesGroup'});
+    frag.appendChild(cellsGroupEl);
+    frag.appendChild(notesGroupEl);
 
     svg.appendChild(frag);
 
     // String names live in their own SVG sharing the board's exact cross-axis
     // coordinates, so a label can never drift from its string.
     const GUTTER = 25*K;
-    const gutterSvg = document.getElementById('gutter');
+    const gutterSvg = gutterEl;
     const gW = layout.orientation==='vertical' ? layout.crossSize : GUTTER;
     const gH = layout.orientation==='vertical' ? GUTTER : layout.crossSize;
     gutterSvg.setAttribute('width', gW);
@@ -274,7 +343,7 @@
   // to exactly one cell, and the handler validates the same value used to draw
   // that spot.
   function renderCells(){
-    const cg = document.getElementById('cellsGroup');
+    const cg = cellsGroupEl;
     cg.innerHTML = '';
     const cp = layout.crossPositions;
     const frag = document.createDocumentFragment();
@@ -306,7 +375,7 @@
   // (key change, flats toggle, resize/orientation, init) instead of paying to
   // regenerate 96 identical rects on every single correct tap.
   function renderNotes(){
-    const g = document.getElementById('notesGroup');
+    const g = notesGroupEl;
     g.innerHTML = '';
     const frag = document.createDocumentFragment();
     noteIndex = Array.from({length:6}, ()=> new Array(FRET_COUNT+1));
@@ -481,7 +550,7 @@
   }
 
   function centerOn(s,f){
-    const scroller = document.getElementById('neckScroll');
+    const scroller = neckScrollEl;
     const pos = layout.xCenter[f];
     if(layout.orientation === 'vertical'){
       scroller.scrollTo({top: Math.max(0, pos - scroller.clientHeight/2), behavior:'smooth'});
@@ -492,15 +561,15 @@
 
   function setStreak(n){
     state.streak = n;
-    document.getElementById('streakVal').textContent = n;
-    document.getElementById('streakBox').classList.toggle('hot', n >= 5);
+    streakValEl.textContent = n;
+    streakBoxEl.classList.toggle('hot', n >= 5);
   }
 
   // ---------- interaction ----------
   // One delegated listener. The cell that was hit already carries its own scale
   // degree, so validation is a direct attribute read — no coordinate maths and no
   // second source of truth that could drift from what's drawn.
-  document.getElementById('board').addEventListener('click', (e)=>{
+  boardEl.addEventListener('click', (e)=>{
     const cell = e.target.closest('.fret-cell');
     if(!cell) return;
     handleClick(+cell.dataset.string, +cell.dataset.fret,
@@ -550,8 +619,8 @@
 
   function renderPlaques(){
     const curDeg = degreeAt(state.current.string, state.current.fret);
-    setPlaque(document.getElementById('curNum'), document.getElementById('curRoman'), curDeg);
-    setPlaque(document.getElementById('tgtNum'), document.getElementById('tgtRoman'), state.targetDegree);
+    setPlaque(curNumEl, curRomanEl, curDeg);
+    setPlaque(tgtNumEl, tgtRomanEl, state.targetDegree);
   }
 
   // ---------- settings ----------
@@ -563,11 +632,12 @@
   });
   keySelect.addEventListener('change', ()=>{
     state.keyIndex = +keySelect.value;
+    saveSettings();
     resetRun();
   });
 
-  document.getElementById('gearBtn').addEventListener('click', ()=>{
-    document.getElementById('settingsDrawer').classList.toggle('open');
+  gearBtnEl.addEventListener('click', ()=>{
+    settingsDrawerEl.classList.toggle('open');
   });
 
   const NOTE_DISPLAY_EVENT = {numerals:'SwitchNumerals', dots:'SwitchDots', hidden:'SwitchHidden'};
@@ -578,6 +648,7 @@
     state.noteDisplay = btn.dataset.val;
     for(const b of noteVisibilitySeg.children) b.classList.toggle('active', b===btn);
     trackEvent(NOTE_DISPLAY_EVENT[state.noteDisplay]);
+    saveSettings();
     renderNotes();
   });
 
@@ -585,6 +656,7 @@
   toggleFlats.addEventListener('click', ()=>{
     state.includeFlats = !state.includeFlats;
     toggleFlats.classList.toggle('on', state.includeFlats);
+    saveSettings();
 
     // Switching flats off can pull the ground out from under a run: the note
     // you're on, or the one you've been asked to find, may no longer be in the
@@ -605,6 +677,7 @@
   toggleNames.addEventListener('click', ()=>{
     state.showNames = !state.showNames;
     toggleNames.classList.toggle('on', state.showNames);
+    saveSettings();
     renderNotes();
   });
 
@@ -612,6 +685,7 @@
   toggleSound.addEventListener('click', ()=>{
     state.soundOn = !state.soundOn;
     toggleSound.classList.toggle('on', state.soundOn);
+    saveSettings();
   });
 
   const guitarTypeSeg = document.getElementById('guitarTypeSeg');
@@ -620,10 +694,23 @@
     if(!btn || btn.dataset.val === state.guitarType) return;
     state.guitarType = btn.dataset.val;
     for(const b of guitarTypeSeg.children) b.classList.toggle('active', b===btn);
+    saveSettings();
     loadGuitarSamples(state.guitarType);
   });
 
-  document.getElementById('restartBtn').addEventListener('click', resetRun);
+  // Reflects state onto the controls above after a load — the markup's
+  // hardcoded active/on classes are just the factory defaults, which
+  // loadSettings() may have already overridden.
+  function syncSettingsUI(){
+    keySelect.value = state.keyIndex;
+    for(const b of noteVisibilitySeg.children) b.classList.toggle('active', b.dataset.val === state.noteDisplay);
+    toggleFlats.classList.toggle('on', state.includeFlats);
+    toggleNames.classList.toggle('on', state.showNames);
+    toggleSound.classList.toggle('on', state.soundOn);
+    for(const b of guitarTypeSeg.children) b.classList.toggle('active', b.dataset.val === state.guitarType);
+  }
+
+  restartBtnEl.addEventListener('click', resetRun);
 
   function resetRun(){
     state.current = rootStartPosition();
@@ -634,7 +721,7 @@
     renderCells();   // covers the key-change path; a no-op cost otherwise since this only runs on manual restart/key-change, never mid-game
     renderNotes();
     renderPlaques();
-    document.getElementById('neckScroll').scrollTo({left:0, top:0, behavior:'smooth'});
+    neckScrollEl.scrollTo({left:0, top:0, behavior:'smooth'});
   }
 
   // ---------- responsive chrome ----------
@@ -642,8 +729,8 @@
   // Moving the real node rather than duplicating keeps one source of truth, and
   // listeners ride along since they're bound to these elements.
   function placeChrome(){
-    const drawer = document.getElementById('settingsDrawer');
-    const slot   = document.getElementById('sideSlot');
+    const drawer = settingsDrawerEl;
+    const slot   = sideSlotEl;
     const app    = document.querySelector('.app');
     const stage  = document.querySelector('.stage');
 
@@ -662,7 +749,7 @@
     renderCells();          // layout just changed, so cell geometry has too
     renderNotes();
     renderPlaques();
-    const scroller = document.getElementById('neckScroll');
+    const scroller = neckScrollEl;
     scroller.scrollLeft = 0;
     scroller.scrollTop = 0;
   }
@@ -690,6 +777,7 @@
   loadGuitarSamples(state.guitarType);   // fire and forget: warms the cache before the first click
   state.current = rootStartPosition();
   state.targetDegree = pickNextTargetDegree();
+  syncSettingsUI();
   placeChrome();
   buildStaticBoard();
   renderCells();
