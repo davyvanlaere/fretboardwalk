@@ -124,6 +124,25 @@
     box-shadow:0 -4.5px 0 var(--muted), 0 4.5px 0 var(--muted);
   }
 
+  /* ---------------- time attack bar ---------------- */
+  /* Sits outside .stage/.board-area on purpose — a fixed-position strip here
+     never touches the flex layout or the neckScroll measurements the
+     fretboard's own sizing depends on. transform (not width) so restarting
+     the animation every note is a compositor-only change, same reasoning as
+     .pulse's will-change above. */
+  .ta-bar-track{
+    flex:0 0 auto; height:4px; background:var(--panel-3);
+    overflow:hidden;
+  }
+  .ta-bar-fill{
+    height:100%; width:100%; background:var(--seek);
+    transform-origin:left; will-change:transform;
+  }
+  @keyframes taDeplete{
+    from{ transform:scaleX(1); }
+    to{ transform:scaleX(0); }
+  }
+
   /* ---------------- settings ---------------- */
   .settings{
     /* .app is a column flex container, and its children default to shrinkable.
@@ -134,7 +153,7 @@
     max-height:0; overflow:hidden; transition:max-height .26s ease;
     background:var(--panel-2); border-bottom:1px solid var(--line);
   }
-  .settings.open{ max-height:340px; }
+  .settings.open{ max-height:400px; }
   .settings-inner{ padding:14px 16px 16px; display:flex; flex-direction:column; gap:14px; }
   .setting-row{
     display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -171,6 +190,10 @@
     padding:9px 12px; border-radius:8px; cursor:pointer; letter-spacing:.04em;
   }
   .restart-btn:active{ background:var(--panel-3); }
+  .restart-btn.accent{
+    background:var(--seek); border-color:var(--seek); color:#2a1600; font-weight:600;
+  }
+  .restart-btn.accent:active{ background:var(--seek-deep); }
 
   /* ---------------- readouts ---------------- */
   .plaques{ flex:0 0 auto; display:flex; padding:12px 14px 10px; gap:10px; }
@@ -248,6 +271,30 @@
     50%{ stroke:var(--live); stroke-width:6; }
   }
   .correct-flash{ animation:good .3s ease-in-out 2; }
+
+  /* ---------------- time attack results ---------------- */
+  /* .app is already position:relative, so this contains to the app card
+     itself rather than the whole viewport — unlike .rotate-lock below, which
+     deliberately does span the viewport. */
+  .ta-results{
+    display:none; position:absolute; inset:0; z-index:10;
+    align-items:center; justify-content:center;
+    background:rgba(6,8,11,.86);
+  }
+  .ta-results.open{ display:flex; }
+  .ta-card{
+    text-align:center; background:var(--panel); border:1px solid var(--line);
+    border-radius:16px; padding:28px 32px; display:flex; flex-direction:column;
+    align-items:stretch; gap:6px; min-width:220px;
+  }
+  .ta-title{ font-size:13px; color:var(--muted); margin-bottom:6px; }
+  .ta-score{ font-size:52px; font-weight:600; color:var(--seek); line-height:1; }
+  .ta-best{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--dim);
+    margin:6px 0 18px;
+  }
+  .ta-best.new-best{ color:var(--seek); }
+  .ta-card .restart-btn{ margin-top:8px; }
 
   /* ---------------- rotate lock ---------------- */
   /* Web pages can't truly lock orientation outside fullscreen, so a phone turned

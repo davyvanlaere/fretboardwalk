@@ -53,6 +53,16 @@
   const settingsDrawerEl= document.getElementById('settingsDrawer');
   const restartBtnEl    = document.getElementById('restartBtn');
   const sideSlotEl      = document.getElementById('sideSlot');
+  const keySelectWrapEl = document.querySelector('.key-select');
+  const taBarTrackEl    = document.getElementById('taBarTrack');
+  const taBarFillEl     = document.getElementById('taBarFill');
+  const taStartBtnEl    = document.getElementById('taStartBtn');
+  const taResultsEl     = document.getElementById('taResults');
+  const taFinalScoreEl  = document.getElementById('taFinalScore');
+  const taBestLineEl    = document.getElementById('taBestLine');
+  const taAgainBtnEl    = document.getElementById('taAgainBtn');
+  const taExitBtnEl     = document.getElementById('taExitBtn');
+  const streakLabelEl   = streakBoxEl.querySelector('.l');
 
   // cellsGroup/notesGroup are recreated from scratch by buildStaticBoard on
   // every layout change, so these two get reassigned there instead of cached
@@ -61,6 +71,7 @@
 
   // ---------- state ----------
   let state = {
+    mode:'practice',  // 'practice' | 'timeAttack'
     keyIndex:0,
     noteDisplay:'hidden',  // 'numerals' | 'dots' | 'hidden'
     showNames:false,
@@ -115,6 +126,46 @@
   }
 
   loadSettings();
+
+  // ---------- time attack ----------
+  // One life: each correct note shaves time off the deadline for the next
+  // one (multiplicative, floored so it stays tappable rather than becoming
+  // literally impossible), and the run ends the instant one note times out.
+  // These three are the entire difficulty curve — tune here, nowhere else.
+  const TA_START_MS = 6000;
+  const TA_DECAY = 0.96;
+  const TA_FLOOR_MS = 900;
+
+  // Transient run data, not a user preference, so it lives beside `state`
+  // rather than inside it — nothing here persists or gets saved/loaded.
+  let timeAttack = {
+    running:false,
+    score:0,
+    nextMs:TA_START_MS,
+    timeoutId:null,
+    practiceSnapshot:null,  // {current, prevDegree, prevDegree2, targetDegree, streak}
+  };
+
+  const BEST_SCORE_KEY = 'fretboardwalk.bestScore';
+
+  function loadBestScore(){
+    try{
+      const n = Number(localStorage.getItem(BEST_SCORE_KEY));
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    }catch(e){ return 0; }
+  }
+
+  // Returns true when this run set a new record, so the results screen can
+  // call it out.
+  function saveBestScoreIfHigher(score){
+    try{
+      if(score > loadBestScore()){
+        localStorage.setItem(BEST_SCORE_KEY, String(score));
+        return true;
+      }
+    }catch(e){}
+    return false;
+  }
 
   // Neck runs vertically on phones and tablets (a neck is long and thin, so it
   // suits the tall axis); horizontal only at true desktop widths. Wide screens
@@ -559,10 +610,15 @@
     }
   }
 
-  function setStreak(n){
-    state.streak = n;
+  // Shared by practice's streak and time attack's score, which repaint the
+  // same header box but never both at once (mode is exclusive).
+  function renderScoreBox(n){
     streakValEl.textContent = n;
     streakBoxEl.classList.toggle('hot', n >= 5);
+  }
+  function setStreak(n){
+    state.streak = n;
+    renderScoreBox(n);
   }
 
   // ---------- interaction ----------
@@ -581,6 +637,11 @@
   }
 
   function handleClick(s, f, deg){
+    // Between a timeout firing and the results screen actually opening (or
+    // after "play again" but before the first note is armed), ignore stray
+    // taps rather than let them score against a run that's already over.
+    if(state.mode === 'timeAttack' && !timeAttack.running) return;
+
     const curDeg = degreeAt(state.current.string, state.current.fret);
     if(deg !== null && deg === curDeg) return;   // already standing here
 
@@ -590,7 +651,13 @@
     if(isCorrect){
       trackEvent('CorrectClick', {degree: deg});
       flashNote(s, f, 'correct-flash');
-      setStreak(state.streak + 1);
+      if(state.mode === 'timeAttack'){
+        timeAttack.score++;
+        renderScoreBox(timeAttack.score);
+        timeAttack.nextMs = Math.max(TA_FLOOR_MS, timeAttack.nextMs * TA_DECAY);
+      } else {
+        setStreak(state.streak + 1);
+      }
       setTimeout(()=>{
         state.prevDegree2 = state.prevDegree;
         state.prevDegree = curDeg;
@@ -599,12 +666,108 @@
         renderNotes();
         renderPlaques();
         centerOn(s,f);
+        // Only start the next deadline once its target is actually visible —
+        // arming it back in the isCorrect branch above would burn part of
+        // the player's reaction window on this same 380ms move transition,
+        // which becomes unfair once nextMs shrinks anywhere near that.
+        if(state.mode === 'timeAttack') armNextNote();
       }, 380);
     } else {
       trackEvent('WrongClick', {degree: deg, target: state.targetDegree});
       flashNote(s, f, 'wrong-flash');
-      setStreak(0);
+      // Time attack is forgiving of a mis-tap: the clock is the only thing
+      // that ends a run, so a wrong note costs nothing here.
+      if(state.mode !== 'timeAttack') setStreak(0);
     }
+  }
+
+  // ---------- time attack control ----------
+  function startTimeAttack(){
+    // Play Again re-enters while state.mode is already 'timeAttack' — only
+    // snapshot the practice run the first time, or a second run would save
+    // the previous run's leftover position as if it were "practice."
+    if(state.mode !== 'timeAttack'){
+      timeAttack.practiceSnapshot = {
+        current: state.current,
+        prevDegree: state.prevDegree,
+        prevDegree2: state.prevDegree2,
+        targetDegree: state.targetDegree,
+        streak: state.streak,
+      };
+    }
+    state.mode = 'timeAttack';
+    state.current = rootStartPosition();
+    state.prevDegree = null;
+    state.prevDegree2 = null;
+    state.targetDegree = pickNextTargetDegree();
+
+    timeAttack.running = true;
+    timeAttack.score = 0;
+    timeAttack.nextMs = TA_START_MS;
+
+    keySelectWrapEl.hidden = true;
+    streakLabelEl.textContent = 'score';
+    renderScoreBox(0);
+    taBarTrackEl.hidden = false;
+    settingsDrawerEl.classList.remove('open');
+    taResultsEl.classList.remove('open');
+
+    renderNotes();
+    renderPlaques();
+    centerOn(state.current.string, state.current.fret);
+
+    trackEvent('TimeAttackStart');
+    armNextNote();   // first target is already visible above, so it's safe to arm now
+  }
+
+  function armNextNote(){
+    clearTimeout(timeAttack.timeoutId);
+    // Restarting a CSS animation with a new duration means setting it to
+    // 'none', forcing a reflow, then reassigning — without the reflow the
+    // browser coalesces the two assignments and the animation never restarts.
+    taBarFillEl.style.animation = 'none';
+    void taBarFillEl.offsetWidth;
+    taBarFillEl.style.animation = `taDeplete ${timeAttack.nextMs}ms linear forwards`;
+    timeAttack.timeoutId = setTimeout(endTimeAttack, timeAttack.nextMs);
+  }
+
+  function endTimeAttack(){
+    timeAttack.running = false;
+    clearTimeout(timeAttack.timeoutId);
+
+    const isNewBest = saveBestScoreIfHigher(timeAttack.score);
+    taFinalScoreEl.textContent = timeAttack.score;
+    taBestLineEl.textContent = isNewBest ? 'New best!' : `Best: ${loadBestScore()}`;
+    taBestLineEl.classList.toggle('new-best', isNewBest);
+    taResultsEl.classList.add('open');
+
+    trackEvent('TimeAttackEnd', {score: timeAttack.score});
+  }
+
+  function exitTimeAttack(){
+    const snap = timeAttack.practiceSnapshot;
+    clearTimeout(timeAttack.timeoutId);
+    timeAttack.running = false;
+    timeAttack.practiceSnapshot = null;
+
+    state.mode = 'practice';
+    if(snap){
+      state.current = snap.current;
+      state.prevDegree = snap.prevDegree;
+      state.prevDegree2 = snap.prevDegree2;
+      state.targetDegree = snap.targetDegree;
+      state.streak = snap.streak;
+    }
+
+    keySelectWrapEl.hidden = false;
+    streakLabelEl.textContent = 'streak';
+    taBarTrackEl.hidden = true;
+    taResultsEl.classList.remove('open');
+
+    setStreak(state.streak);
+    renderNotes();
+    renderPlaques();
+    centerOn(state.current.string, state.current.fret);
   }
 
   function setPlaque(numEl, romanEl, deg){
@@ -631,6 +794,7 @@
     keySelect.appendChild(opt);
   });
   keySelect.addEventListener('change', ()=>{
+    if(state.mode === 'timeAttack') return;   // hidden during a run, but guard regardless
     state.keyIndex = +keySelect.value;
     saveSettings();
     resetRun();
@@ -654,6 +818,10 @@
 
   const toggleFlats = document.getElementById('toggleFlats');
   toggleFlats.addEventListener('click', ()=>{
+    // The settings rail stays reachable on wide screens during time attack;
+    // flipping this mid-run could invalidate the live current/target degree
+    // out from under a running countdown, so it's blocked outright there.
+    if(state.mode === 'timeAttack') return;
     state.includeFlats = !state.includeFlats;
     toggleFlats.classList.toggle('on', state.includeFlats);
     saveSettings();
@@ -712,7 +880,16 @@
 
   restartBtnEl.addEventListener('click', resetRun);
 
+  taStartBtnEl.addEventListener('click', startTimeAttack);
+  taAgainBtnEl.addEventListener('click', startTimeAttack);
+  taExitBtnEl.addEventListener('click', exitTimeAttack);
+
   function resetRun(){
+    // Restarting mid-sprint would desync the live countdown from whatever
+    // position/target it just reset to; the settings rail stays reachable
+    // on wide screens even during time attack, so this needs its own guard
+    // rather than relying on the button being hidden.
+    if(state.mode === 'timeAttack') return;
     state.current = rootStartPosition();
     state.prevDegree = null;
     state.prevDegree2 = null;

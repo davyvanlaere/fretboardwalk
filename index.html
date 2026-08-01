@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260724">
+<link rel="stylesheet" href="style.css?v=20260801">
 </head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WL72320DHV"></script>
@@ -42,6 +42,10 @@
       <button class="gear-btn" id="gearBtn" aria-label="Settings"><span></span></button>
     </div>
   </header>
+
+  <div class="ta-bar-track" id="taBarTrack" hidden>
+    <div class="ta-bar-fill" id="taBarFill"></div>
+  </div>
 
   <div class="settings" id="settingsDrawer">
     <div class="settings-inner">
@@ -73,6 +77,7 @@
           <button class="seg-btn" data-val="Electric">Electric</button>
         </div>
       </div>
+      <button class="restart-btn accent" id="taStartBtn">START TIME ATTACK</button>
       <button class="restart-btn" id="restartBtn">RESTART FROM ROOT</button>
     </div>
   </div>
@@ -104,6 +109,16 @@
     </div>
   </div>
 
+  <div class="ta-results" id="taResults">
+    <div class="ta-card">
+      <div class="ta-title">Clock caught you</div>
+      <div class="ta-score" id="taFinalScore">0</div>
+      <div class="ta-best" id="taBestLine">Best: 0</div>
+      <button class="restart-btn accent" id="taAgainBtn">PLAY AGAIN</button>
+      <button class="restart-btn" id="taExitBtn">EXIT TO PRACTICE</button>
+    </div>
+  </div>
+
 </div>
 
 <div class="rotate-lock">
@@ -112,7 +127,7 @@
   <p>Fretboardwalk runs the neck vertically, so it needs portrait. Rotate back to carry on.</p>
 </div>
 
-<script src="script.js?v=20260726"></script>
+<script src="script.js?v=20260801"></script>
 
 </body>
 </html>
