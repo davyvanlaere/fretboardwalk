@@ -91,14 +91,44 @@
 
   /* streak now lives up here, so the board keeps the vertical space */
   .streak{
+    position:relative;   /* anchors the combo burst that floats above it */
     display:flex; align-items:baseline; gap:5px;
     background:var(--panel-2); border:1px solid var(--line);
     border-radius:8px; padding:6px 9px;
     font-family:'IBM Plex Mono', monospace;
+    transition:border-color .2s, box-shadow .2s;
   }
-  .streak .v{ font-size:13px; font-weight:600; color:var(--text); line-height:1; }
+  .streak .v{ font-size:13px; font-weight:600; color:var(--text); line-height:1; display:inline-block; }
   .streak .l{ font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
-  .streak.hot .v{ color:var(--live); }
+
+  /* Escalating "heat" as the combo climbs — colour + glow only, never audio,
+     so the note you hear stays the true pitch. Tiers at 5 / 10 / 25. */
+  .streak.combo1 .v{ color:var(--live); }
+  .streak.combo2 .v{ color:var(--seek); }
+  .streak.combo2{ border-color:var(--seek); }
+  .streak.combo3 .v{ color:var(--miss); }
+  .streak.combo3{ border-color:var(--miss); box-shadow:0 0 12px rgba(251,113,133,.45); }
+
+  /* The score number pops on every correct answer. */
+  @keyframes comboPop{ 0%{ transform:scale(1); } 40%{ transform:scale(1.4); } 100%{ transform:scale(1); } }
+  .streak .v.pop{ animation:comboPop .25s ease-out; }
+
+  /* Bigger whole-box pulse at each milestone (every 5). */
+  @keyframes comboMilestone{ 0%{ transform:scale(1); } 28%{ transform:scale(1.16); } 100%{ transform:scale(1); } }
+  .streak.milestone{ animation:comboMilestone .5s ease-out; }
+
+  /* A "🔥 N" that rises and fades out of the box on each milestone. */
+  .combo-burst{
+    position:absolute; left:50%; top:0; transform:translate(-50%,0);
+    font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:700;
+    color:var(--seek); white-space:nowrap; pointer-events:none; opacity:0;
+  }
+  @keyframes comboBurstRise{
+    0%{ opacity:0; transform:translate(-50%,2px) scale(.8); }
+    25%{ opacity:1; }
+    100%{ opacity:0; transform:translate(-50%,-24px) scale(1.1); }
+  }
+  .combo-burst.go{ animation:comboBurstRise .8s ease-out; }
 
   .key-select{ position:relative; }
   .key-select select{

@@ -45,6 +45,7 @@
   const fretboardWrapEl = document.getElementById('fretboardWrap');
   const streakValEl     = document.getElementById('streakVal');
   const streakBoxEl     = document.getElementById('streakBox');
+  const comboBurstEl    = document.getElementById('comboBurst');
   const curNumEl        = document.getElementById('curNum');
   const curRomanEl      = document.getElementById('curRoman');
   const tgtNumEl        = document.getElementById('tgtNum');
@@ -159,41 +160,42 @@
 
   function emptyBoards(){ return {numerals:[], dots:[], hidden:[]}; }
 
+  // A board is the distinct top scores for a mode — a high-scores list, not a
+  // history, so the same value never appears twice. Deduped on load too, which
+  // also cleans up any duplicates written before that rule existed.
+  function cleanBoard(arr){
+    return Array.from(new Set(arr.filter(n => Number.isFinite(n) && n >= 0)))
+      .sort((a,b) => b-a)
+      .slice(0, TA_MAX_SCORES);
+  }
+
   function loadBestScores(){
     const boards = emptyBoards();
     try{
       const saved = JSON.parse(localStorage.getItem(BEST_SCORES_KEY) || '{}');
       for(const mode of Object.keys(boards)){
-        if(Array.isArray(saved[mode])){
-          boards[mode] = saved[mode]
-            .filter(n => Number.isFinite(n) && n >= 0)
-            .sort((a,b) => b-a)
-            .slice(0, TA_MAX_SCORES);
-        }
+        if(Array.isArray(saved[mode])) boards[mode] = cleanBoard(saved[mode]);
       }
     }catch(e){}
     return boards;
   }
 
   // Inserts a finished run's score into its mode bucket and returns where it
-  // landed: {rank, board}. rank is 1-based (1 = new personal best) or 0 when
-  // the score didn't crack the top 5. A score of 0 is never recorded — a run
-  // that found nothing doesn't earn a leaderboard slot.
+  // landed: {rank, board, isNew}. rank is 1-based (1 = best) or 0 when the
+  // score didn't crack the top 5. isNew is false when the score merely tied a
+  // value already on the board, so the results screen can skip celebrating it.
+  // A score of 0 is never recorded — a run that found nothing earns no slot.
   function recordScore(mode, score){
     const boards = loadBestScores();
-    const board = boards[mode] || (boards[mode] = []);
-    if(score <= 0) return {rank:0, board};
+    const board = boards[mode];
+    if(score <= 0) return {rank:0, board, isNew:false};
 
-    // Rank by how many stored scores strictly beat this one, so a tie ranks
-    // just behind the score it matched rather than displacing it.
-    const rank = board.filter(n => n > score).length + 1;
-
-    board.push(score);
-    board.sort((a,b) => b-a);
-    if(board.length > TA_MAX_SCORES) board.length = TA_MAX_SCORES;
+    const isNew = !board.includes(score);
+    boards[mode] = cleanBoard([...board, score]);
     try{ localStorage.setItem(BEST_SCORES_KEY, JSON.stringify(boards)); }catch(e){}
 
-    return {rank: rank <= TA_MAX_SCORES ? rank : 0, board};
+    const idx = boards[mode].indexOf(score);   // -1 if it fell outside the top 5
+    return {rank: idx >= 0 ? idx + 1 : 0, board: boards[mode], isNew};
   }
 
   const RANK_LABEL = {1:'New personal best!', 2:'2nd best!', 3:'3rd best!', 4:'4th best!', 5:'5th best!'};
@@ -642,14 +644,77 @@
   }
 
   // Shared by practice's streak and time attack's score, which repaint the
-  // same header box but never both at once (mode is exclusive).
+  // same header box but never both at once (mode is exclusive). The heat tier
+  // is derived purely from the count, so dropping to 0 (a broken streak) also
+  // clears the glow.
   function renderScoreBox(n){
     streakValEl.textContent = n;
-    streakBoxEl.classList.toggle('hot', n >= 5);
+    streakBoxEl.classList.toggle('combo1', n >= 5  && n < 10);
+    streakBoxEl.classList.toggle('combo2', n >= 10 && n < 25);
+    streakBoxEl.classList.toggle('combo3', n >= 25);
   }
   function setStreak(n){
     state.streak = n;
     renderScoreBox(n);
+  }
+
+  // ---------- combo juice ----------
+  // Reinforcement layered on top of a correct answer WITHOUT touching the note
+  // audio: the pitch you hear is always the true fretted note. Escalation rides
+  // on sight (pop + heat), touch (haptics), and an occasional milestone chime
+  // that's deliberately a bright non-guitar sound so it can't be mistaken for a
+  // note being learned.
+  const COMBO_MILESTONE = 5;   // celebrate every 5 in a row
+
+  // Android fires this; iOS Safari has no Vibration API, so it's a silent no-op
+  // there (guarded, never throws). Gated on the same Sound-feedback switch so
+  // one control quiets everything.
+  function haptic(pattern){
+    if(!state.soundOn) return;
+    try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+  }
+
+  // A short ascending chime built from the existing AudioContext. Triangle
+  // tones, obviously a UI flourish rather than a fretted note; more notes the
+  // higher the milestone. Reuses whatever context playGuitarNote already woke.
+  function playMilestoneSound(level){
+    if(!state.soundOn || !audioCtx || audioCtx.state !== 'running') return;
+    const ctx = audioCtx;
+    const now = ctx.currentTime;
+    const base = 660;   // bright, well clear of the guitar register
+    const steps = level >= 25 ? [0,4,7,12] : level >= 10 ? [0,4,7] : [0,7];
+    steps.forEach((semi, i)=>{
+      const t = now + i*0.06;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(base * Math.pow(2, semi/12), t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.13, t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.18);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t); o.stop(t+0.2);
+    });
+  }
+
+  // Removing then re-adding a class after a forced reflow restarts a CSS
+  // animation that's already running — needed since consecutive correct taps
+  // re-trigger the same pop.
+  function restartAnim(elEl, cls){
+    elEl.classList.remove(cls);
+    void elEl.offsetWidth;
+    elEl.classList.add(cls);
+  }
+
+  function bumpCombo(n){
+    restartAnim(streakValEl, 'pop');
+    haptic(8);
+    if(n > 0 && n % COMBO_MILESTONE === 0){
+      playMilestoneSound(n);
+      haptic([0,25,35,25]);
+      comboBurstEl.textContent = '🔥 ' + n;
+      restartAnim(comboBurstEl, 'go');
+      restartAnim(streakBoxEl, 'milestone');
+    }
   }
 
   // ---------- interaction ----------
@@ -686,8 +751,10 @@
         timeAttack.score++;
         renderScoreBox(timeAttack.score);
         timeAttack.nextMs = Math.max(TA_FLOOR_MS, timeAttack.nextMs * TA_DECAY);
+        bumpCombo(timeAttack.score);
       } else {
         setStreak(state.streak + 1);
+        bumpCombo(state.streak);
       }
       setTimeout(()=>{
         state.prevDegree2 = state.prevDegree;
@@ -779,14 +846,16 @@
     clearTimeout(timeAttack.timeoutId);
 
     const mode = timeAttack.mode;
-    const {rank, board} = recordScore(mode, timeAttack.score);
+    const {rank, board, isNew} = recordScore(mode, timeAttack.score);
     const madeBoard = rank > 0;
 
     taFinalScoreEl.textContent = timeAttack.score;
-    taBestLineEl.textContent = madeBoard
+    // Only celebrate a genuinely new placement; tying a score already on the
+    // board still highlights its row but reads as a neutral standing.
+    taBestLineEl.textContent = (madeBoard && isNew)
       ? RANK_LABEL[rank]
       : (board.length ? `Best: ${board[0]}` : 'No score this run');
-    taBestLineEl.classList.toggle('new-best', madeBoard);
+    taBestLineEl.classList.toggle('new-best', madeBoard && isNew);
 
     taBoardLabelEl.textContent = `${NOTE_DISPLAY_LABEL[mode]} mode · top 5`;
     renderLeaderboard(board, madeBoard ? rank : 0);
@@ -795,10 +864,9 @@
     trackEvent('TimeAttackEnd', {score: timeAttack.score, mode, rank});
   }
 
-  // Renders the mode's top-5 as an ordered list, marking the row this run just
-  // earned (highlightRank, 1-based; 0 = nothing to highlight). Duplicate
-  // scores are identical numbers, so highlighting the row at that rank reads
-  // correctly even when a tie put two equal scores side by side.
+  // Renders the mode's top-5 as an ordered list, marking the row this run
+  // earned (highlightRank, 1-based; 0 = nothing to highlight). Scores are
+  // distinct, so at most one row matches.
   function renderLeaderboard(board, highlightRank){
     taBoardEl.innerHTML = '';
     const frag = document.createDocumentFragment();
