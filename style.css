@@ -221,6 +221,32 @@
   .plaque.current .num{ color:var(--live); }
   .plaque.target .num{ color:var(--seek); }
 
+  /* Time Attack lives as a third tile in the plaques row, so it costs no
+     vertical neck space — it shares the row the readouts already occupy.
+     Compact (not flex:1) so Current/Find keep the visual weight. */
+  .plaque-action{
+    flex:0 0 auto; width:74px; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    background:var(--seek); border:1px solid var(--seek); color:#2a1600;
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .plaque-action::before{ display:none; }   /* no accent bar; the whole tile is the accent */
+  .plaque-action:active{ background:var(--seek-deep); border-color:var(--seek-deep); }
+  .plaque-action[hidden]{ display:none; }
+  /* While a run is live the same tile becomes a Stop control: red, square
+     icon, single-word label. Reusing one element keeps its spot in the
+     plaques row fixed instead of shifting when the run starts/ends. */
+  .plaque-action.stopping{ background:var(--miss); border-color:var(--miss); color:#2a0a0e; }
+  .plaque-action.stopping:active{ background:#e11d48; border-color:#e11d48; }
+  .plaque-action .icon-stop{ display:none; }
+  .plaque-action.stopping .icon-start{ display:none; }
+  .plaque-action.stopping .icon-stop{ display:block; }
+  .ta-icon{ width:22px; height:22px; display:block; }
+  .ta-label{
+    font-size:9px; font-weight:600; line-height:1.15; letter-spacing:.06em;
+    text-transform:uppercase; text-align:center;
+  }
+
   /* ---------------- fretboard ---------------- */
   .board-area{ flex:1 1 auto; display:flex; min-height:0; min-width:0; padding:0 0 10px; }
   .fretboard-wrap{ display:flex; flex:1; min-height:0; min-width:0; }
@@ -290,10 +316,27 @@
   .ta-title{ font-size:13px; color:var(--muted); margin-bottom:6px; }
   .ta-score{ font-size:52px; font-weight:600; color:var(--seek); line-height:1; }
   .ta-best{
-    font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--dim);
-    margin:6px 0 18px;
+    font-family:'IBM Plex Mono', monospace; font-size:13px; font-weight:600; color:var(--dim);
+    margin:6px 0 12px;
   }
   .ta-best.new-best{ color:var(--seek); }
+
+  .ta-board-label{
+    font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--dim); margin-bottom:6px;
+  }
+  .ta-board{
+    list-style:none; counter-reset:rank; margin:0 0 8px; padding:0;
+    font-family:'IBM Plex Mono', monospace; font-size:13px;
+  }
+  .ta-board li{
+    counter-increment:rank;
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:5px 10px; border-radius:6px; color:var(--muted);
+  }
+  .ta-board li::before{ content:counter(rank) "."; color:var(--dim); }
+  .ta-board li.you{ background:var(--panel-3); color:var(--seek); font-weight:600; }
+  .ta-board li.you::before{ color:var(--seek); }
   .ta-card .restart-btn{ margin-top:8px; }
 
   /* ---------------- rotate lock ---------------- */
@@ -354,6 +397,12 @@
     .plaque .num{ font-size:70px; }
     .plaque .num.wide{ font-size:54px; }
     .plaque .roman{ font-size:13px; margin-top:4px; }
+
+    /* Rail stacks the plaques vertically, so the action tile goes full-width
+       below Find and reads with a bit more presence than the phone tile. */
+    .plaque-action{ width:auto; flex-direction:row; gap:8px; padding:14px; }
+    .plaque-action .ta-label{ font-size:11px; }
+    .plaque-action .ta-icon{ width:20px; height:20px; }
 
     .side-slot{ display:flex; flex-direction:column; gap:20px; }
     .side .settings{

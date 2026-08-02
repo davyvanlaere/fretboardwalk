@@ -60,6 +60,8 @@
   const taResultsEl     = document.getElementById('taResults');
   const taFinalScoreEl  = document.getElementById('taFinalScore');
   const taBestLineEl    = document.getElementById('taBestLine');
+  const taBoardLabelEl  = document.getElementById('taBoardLabel');
+  const taBoardEl       = document.getElementById('taBoard');
   const taAgainBtnEl    = document.getElementById('taAgainBtn');
   const taExitBtnEl     = document.getElementById('taExitBtn');
   const streakLabelEl   = streakBoxEl.querySelector('.l');
@@ -132,7 +134,7 @@
   // one (multiplicative, floored so it stays tappable rather than becoming
   // literally impossible), and the run ends the instant one note times out.
   // These three are the entire difficulty curve — tune here, nowhere else.
-  const TA_START_MS = 6000;
+  const TA_START_MS = 9000;
   const TA_DECAY = 0.96;
   const TA_FLOOR_MS = 900;
 
@@ -143,29 +145,58 @@
     score:0,
     nextMs:TA_START_MS,
     timeoutId:null,
+    mode:'hidden',          // note-display mode captured at run start (scoring bucket)
     practiceSnapshot:null,  // {current, prevDegree, prevDegree2, targetDegree, streak}
   };
 
-  const BEST_SCORE_KEY = 'fretboardwalk.bestScore';
+  // Scores are bucketed by note-display mode because it changes the difficulty
+  // outright — numerals hands you the answer on the board, dots show only where
+  // the scale sits, hidden shows nothing — so ranking them together would be
+  // meaningless. Each bucket keeps a top-5 leaderboard.
+  const BEST_SCORES_KEY = 'fretboardwalk.bestScores';
+  const TA_MAX_SCORES = 5;
+  const NOTE_DISPLAY_LABEL = {numerals:'Numerals', dots:'Dots', hidden:'Hidden'};
 
-  function loadBestScore(){
-    try{
-      const n = Number(localStorage.getItem(BEST_SCORE_KEY));
-      return Number.isFinite(n) && n >= 0 ? n : 0;
-    }catch(e){ return 0; }
-  }
+  function emptyBoards(){ return {numerals:[], dots:[], hidden:[]}; }
 
-  // Returns true when this run set a new record, so the results screen can
-  // call it out.
-  function saveBestScoreIfHigher(score){
+  function loadBestScores(){
+    const boards = emptyBoards();
     try{
-      if(score > loadBestScore()){
-        localStorage.setItem(BEST_SCORE_KEY, String(score));
-        return true;
+      const saved = JSON.parse(localStorage.getItem(BEST_SCORES_KEY) || '{}');
+      for(const mode of Object.keys(boards)){
+        if(Array.isArray(saved[mode])){
+          boards[mode] = saved[mode]
+            .filter(n => Number.isFinite(n) && n >= 0)
+            .sort((a,b) => b-a)
+            .slice(0, TA_MAX_SCORES);
+        }
       }
     }catch(e){}
-    return false;
+    return boards;
   }
+
+  // Inserts a finished run's score into its mode bucket and returns where it
+  // landed: {rank, board}. rank is 1-based (1 = new personal best) or 0 when
+  // the score didn't crack the top 5. A score of 0 is never recorded — a run
+  // that found nothing doesn't earn a leaderboard slot.
+  function recordScore(mode, score){
+    const boards = loadBestScores();
+    const board = boards[mode] || (boards[mode] = []);
+    if(score <= 0) return {rank:0, board};
+
+    // Rank by how many stored scores strictly beat this one, so a tie ranks
+    // just behind the score it matched rather than displacing it.
+    const rank = board.filter(n => n > score).length + 1;
+
+    board.push(score);
+    board.sort((a,b) => b-a);
+    if(board.length > TA_MAX_SCORES) board.length = TA_MAX_SCORES;
+    try{ localStorage.setItem(BEST_SCORES_KEY, JSON.stringify(boards)); }catch(e){}
+
+    return {rank: rank <= TA_MAX_SCORES ? rank : 0, board};
+  }
+
+  const RANK_LABEL = {1:'New personal best!', 2:'2nd best!', 3:'3rd best!', 4:'4th best!', 5:'5th best!'};
 
   // Neck runs vertically on phones and tablets (a neck is long and thin, so it
   // suits the tall axis); horizontal only at true desktop widths. Wide screens
@@ -682,6 +713,13 @@
   }
 
   // ---------- time attack control ----------
+  const taLabelEl = taStartBtnEl.querySelector('.ta-label');
+  function setTimeAttackButton(running){
+    taStartBtnEl.classList.toggle('stopping', running);
+    taStartBtnEl.setAttribute('aria-label', running ? 'Stop Time Attack' : 'Start Time Attack');
+    taLabelEl.innerHTML = running ? 'Stop' : 'Time<br>Attack';
+  }
+
   function startTimeAttack(){
     // Play Again re-enters while state.mode is already 'timeAttack' — only
     // snapshot the practice run the first time, or a second run would save
@@ -704,8 +742,13 @@
     timeAttack.running = true;
     timeAttack.score = 0;
     timeAttack.nextMs = TA_START_MS;
+    // Lock in the difficulty bucket now; changing the note display mid-run
+    // won't move the goalposts on which board this score lands in.
+    timeAttack.mode = state.noteDisplay;
 
     keySelectWrapEl.hidden = true;
+    setTimeAttackButton(true);   // same tile becomes the Stop control
+
     streakLabelEl.textContent = 'score';
     renderScoreBox(0);
     taBarTrackEl.hidden = false;
@@ -735,13 +778,37 @@
     timeAttack.running = false;
     clearTimeout(timeAttack.timeoutId);
 
-    const isNewBest = saveBestScoreIfHigher(timeAttack.score);
+    const mode = timeAttack.mode;
+    const {rank, board} = recordScore(mode, timeAttack.score);
+    const madeBoard = rank > 0;
+
     taFinalScoreEl.textContent = timeAttack.score;
-    taBestLineEl.textContent = isNewBest ? 'New best!' : `Best: ${loadBestScore()}`;
-    taBestLineEl.classList.toggle('new-best', isNewBest);
+    taBestLineEl.textContent = madeBoard
+      ? RANK_LABEL[rank]
+      : (board.length ? `Best: ${board[0]}` : 'No score this run');
+    taBestLineEl.classList.toggle('new-best', madeBoard);
+
+    taBoardLabelEl.textContent = `${NOTE_DISPLAY_LABEL[mode]} mode · top 5`;
+    renderLeaderboard(board, madeBoard ? rank : 0);
     taResultsEl.classList.add('open');
 
-    trackEvent('TimeAttackEnd', {score: timeAttack.score});
+    trackEvent('TimeAttackEnd', {score: timeAttack.score, mode, rank});
+  }
+
+  // Renders the mode's top-5 as an ordered list, marking the row this run just
+  // earned (highlightRank, 1-based; 0 = nothing to highlight). Duplicate
+  // scores are identical numbers, so highlighting the row at that rank reads
+  // correctly even when a tie put two equal scores side by side.
+  function renderLeaderboard(board, highlightRank){
+    taBoardEl.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    for(let i=0; i<board.length; i++){
+      const li = document.createElement('li');
+      li.textContent = board[i];
+      if(i === highlightRank - 1) li.className = 'you';
+      frag.appendChild(li);
+    }
+    taBoardEl.appendChild(frag);
   }
 
   function exitTimeAttack(){
@@ -760,6 +827,7 @@
     }
 
     keySelectWrapEl.hidden = false;
+    setTimeAttackButton(false);
     streakLabelEl.textContent = 'streak';
     taBarTrackEl.hidden = true;
     taResultsEl.classList.remove('open');
@@ -880,7 +948,13 @@
 
   restartBtnEl.addEventListener('click', resetRun);
 
-  taStartBtnEl.addEventListener('click', startTimeAttack);
+  // The one tile toggles: it's Start in practice, Stop mid-run. Stopping
+  // aborts back to practice (exitTimeAttack) rather than showing the results
+  // screen — quitting isn't the same as the clock catching you.
+  taStartBtnEl.addEventListener('click', ()=>{
+    if(state.mode === 'timeAttack') exitTimeAttack();
+    else startTimeAttack();
+  });
   taAgainBtnEl.addEventListener('click', startTimeAttack);
   taExitBtnEl.addEventListener('click', exitTimeAttack);
 

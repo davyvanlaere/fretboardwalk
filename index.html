@@ -77,7 +77,6 @@
           <button class="seg-btn" data-val="Electric">Electric</button>
         </div>
       </div>
-      <button class="restart-btn accent" id="taStartBtn">START TIME ATTACK</button>
       <button class="restart-btn" id="restartBtn">RESTART FROM ROOT</button>
     </div>
   </div>
@@ -95,6 +94,17 @@
           <div class="num" id="tgtNum">5</div>
           <div class="roman" id="tgtRoman">V</div>
         </div>
+        <button class="plaque plaque-action" id="taStartBtn" aria-label="Start Time Attack">
+          <svg class="ta-icon icon-start" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 13V9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M9 2h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <svg class="ta-icon icon-stop" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/>
+          </svg>
+          <span class="ta-label">Time<br>Attack</span>
+        </button>
       </div>
       <div class="side-slot" id="sideSlot"></div>
     </aside>
@@ -114,6 +124,8 @@
       <div class="ta-title">Clock caught you</div>
       <div class="ta-score" id="taFinalScore">0</div>
       <div class="ta-best" id="taBestLine">Best: 0</div>
+      <div class="ta-board-label" id="taBoardLabel">Hidden mode · top 5</div>
+      <ol class="ta-board" id="taBoard"></ol>
       <button class="restart-btn accent" id="taAgainBtn">PLAY AGAIN</button>
       <button class="restart-btn" id="taExitBtn">EXIT TO PRACTICE</button>
     </div>
