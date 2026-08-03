@@ -51,6 +51,11 @@
   const tgtNumEl        = document.getElementById('tgtNum');
   const tgtRomanEl      = document.getElementById('tgtRoman');
   const gearBtnEl       = document.getElementById('gearBtn');
+  const helpBtnEl       = document.getElementById('helpBtn');
+  const howtoEl         = document.getElementById('howto');
+  const howtoCloseEl    = document.getElementById('howtoClose');
+  const onboardEl       = document.getElementById('onboard');
+  const onboardSkipEl   = document.getElementById('onboardSkip');
   const settingsDrawerEl= document.getElementById('settingsDrawer');
   const restartBtnEl    = document.getElementById('restartBtn');
   const sideSlotEl      = document.getElementById('sideSlot');
@@ -76,7 +81,7 @@
   let state = {
     mode:'practice',  // 'practice' | 'timeAttack'
     keyIndex:0,
-    noteDisplay:'hidden',  // 'numerals' | 'dots' | 'hidden'
+    noteDisplay:'numerals',  // 'numerals' | 'dots' | 'hidden' — beginner-friendly default; first visit lets the user pick
     showNames:false,
     includeFlats:false,
     soundOn:true,
@@ -814,6 +819,7 @@
     timeAttack.mode = state.noteDisplay;
 
     keySelectWrapEl.hidden = true;
+    helpBtnEl.hidden = true;     // a modal mid-run would hide a ticking clock
     setTimeAttackButton(true);   // same tile becomes the Stop control
 
     streakLabelEl.textContent = 'score';
@@ -821,6 +827,7 @@
     taBarTrackEl.hidden = false;
     settingsDrawerEl.classList.remove('open');
     taResultsEl.classList.remove('open');
+    closeHowto();
 
     renderNotes();
     renderPlaques();
@@ -895,6 +902,7 @@
     }
 
     keySelectWrapEl.hidden = false;
+    helpBtnEl.hidden = false;
     setTimeAttackButton(false);
     streakLabelEl.textContent = 'streak';
     taBarTrackEl.hidden = true;
@@ -939,6 +947,46 @@
   gearBtnEl.addEventListener('click', ()=>{
     settingsDrawerEl.classList.toggle('open');
   });
+
+  // ---------- how-to overlay ----------
+  function openHowto(){ howtoEl.classList.add('open'); trackEvent('OpenHowto'); }
+  function closeHowto(){ howtoEl.classList.remove('open'); }
+  helpBtnEl.addEventListener('click', openHowto);
+  howtoCloseEl.addEventListener('click', closeHowto);
+  // Click on the dimmed backdrop (but not the card) closes it.
+  howtoEl.addEventListener('click', (e)=>{ if(e.target === howtoEl) closeHowto(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeHowto(); });
+
+  // ---------- first-visit onboarding ----------
+  // Shows the difficulty picker exactly once per browser. Anyone who already
+  // used the app (has saved settings) is treated as onboarded, so returning
+  // users are never interrupted. Storage failures just skip it silently.
+  const ONBOARDED_KEY = 'fretboardwalk.onboarded';
+  function markOnboarded(){ try{ localStorage.setItem(ONBOARDED_KEY, '1'); }catch(e){} }
+  function shouldOnboard(){
+    // ?init=true force-shows the picker regardless of the saved flag — handy
+    // for testing without clearing storage.
+    try{ if(new URLSearchParams(location.search).get('init') === 'true') return true; }catch(e){}
+    try{
+      if(localStorage.getItem(ONBOARDED_KEY)) return false;
+      if(localStorage.getItem(SETTINGS_KEY)){ markOnboarded(); return false; }
+      return true;
+    }catch(e){ return false; }
+  }
+  function finishOnboarding(mode){
+    if(mode){
+      state.noteDisplay = mode;
+      syncSettingsUI();
+      saveSettings();
+      renderNotes();
+    }
+    markOnboarded();
+    onboardEl.classList.remove('open');
+  }
+  onboardEl.querySelectorAll('.onboard-opt').forEach(btn => {
+    btn.addEventListener('click', ()=> finishOnboarding(btn.dataset.val));
+  });
+  onboardSkipEl.addEventListener('click', ()=> finishOnboarding(null));  // keep the Numerals default
 
   const NOTE_DISPLAY_EVENT = {numerals:'SwitchNumerals', dots:'SwitchDots', hidden:'SwitchHidden'};
   const noteVisibilitySeg = document.getElementById('noteVisibilitySeg');
@@ -1102,5 +1150,7 @@
   renderCells();
   renderNotes();
   renderPlaques();
+
+  if(shouldOnboard()) onboardEl.classList.add('open');
 
 })();

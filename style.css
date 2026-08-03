@@ -153,6 +153,18 @@
     display:block; width:14px; height:1.5px; background:var(--muted);
     box-shadow:0 -4.5px 0 var(--muted), 0 4.5px 0 var(--muted);
   }
+  /* Help "?" button — shares the gear button's chrome so the header controls
+     read as a set. */
+  .icon-btn{
+    width:32px; height:32px; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; cursor:pointer;
+    color:var(--muted); font-family:'IBM Plex Mono', monospace;
+    font-size:15px; font-weight:600; line-height:1; padding:0;
+  }
+  .icon-btn:active{ background:var(--panel-3); }
+  .icon-btn[hidden]{ display:none; }
 
   /* ---------------- time attack bar ---------------- */
   /* Sits outside .stage/.board-area on purpose — a fixed-position strip here
@@ -368,6 +380,92 @@
   .ta-board li.you{ background:var(--panel-3); color:var(--seek); font-weight:600; }
   .ta-board li.you::before{ color:var(--seek); }
   .ta-card .restart-btn{ margin-top:8px; }
+
+  /* ---------------- how-to overlay ---------------- */
+  /* Quick in-app reference; the deep content lives on the separate /help page
+     (linked below) which is what search actually indexes. Same overlay idiom
+     as .ta-results — contained to the .app card via position:absolute. */
+  .howto{
+    display:none; position:absolute; inset:0; z-index:20;
+    align-items:center; justify-content:center; padding:20px;
+    background:rgba(6,8,11,.86);
+  }
+  .howto.open{ display:flex; }
+  .howto-card{
+    position:relative; width:100%; max-width:340px;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:24px 22px 22px;
+  }
+  .howto-close{
+    position:absolute; top:10px; right:12px;
+    background:none; border:none; color:var(--dim); cursor:pointer;
+    font-size:24px; line-height:1; padding:4px;
+  }
+  .howto-close:active{ color:var(--text); }
+  .howto-card h2{ font-size:18px; margin:0 0 14px; }
+  .howto-steps{
+    margin:0 0 14px; padding:0; list-style:none;
+    counter-reset:hstep; display:flex; flex-direction:column; gap:11px;
+  }
+  .howto-steps li{
+    position:relative; padding-left:32px; font-size:13.5px; line-height:1.5;
+    color:var(--muted);
+  }
+  .howto-steps li b{ color:var(--text); font-weight:600; }
+  .howto-steps li::before{
+    counter-increment:hstep; content:counter(hstep);
+    position:absolute; left:0; top:0; width:22px; height:22px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600;
+    color:#04212a; background:var(--live); border-radius:6px;
+  }
+  .howto-hint{ font-size:12.5px; color:var(--dim); margin:0 0 16px; line-height:1.5; }
+  .howto-guide{
+    display:block; text-align:center; text-decoration:none;
+    font-size:13px; font-weight:600; color:#04212a; background:var(--live);
+    border-radius:9px; padding:11px 12px;
+  }
+  .howto-guide:active{ background:var(--live-deep); }
+
+  /* ---------------- first-visit onboarding ---------------- */
+  /* Shown once (gated by a localStorage flag) so a newcomer picks a starting
+     difficulty instead of landing cold. Sits above every other overlay. */
+  .onboard{
+    display:none; position:absolute; inset:0; z-index:30;
+    align-items:center; justify-content:center; padding:20px;
+    background:rgba(6,8,11,.92);
+  }
+  .onboard.open{ display:flex; }
+  .onboard-card{
+    width:100%; max-width:360px;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:24px 22px 18px;
+  }
+  .onboard-card h2{ font-size:19px; margin:0 0 8px; }
+  .onboard-sub{ font-size:13px; line-height:1.55; color:var(--muted); margin:0 0 18px; }
+  .onboard-opts{ display:flex; flex-direction:column; gap:10px; }
+  .onboard-opt{
+    display:flex; flex-direction:column; gap:3px; text-align:left;
+    background:var(--panel-2); border:1px solid var(--line-strong);
+    border-radius:11px; padding:12px 14px; cursor:pointer; color:var(--text);
+    font-family:inherit;
+  }
+  .onboard-opt:hover{ border-color:var(--live); }
+  .onboard-opt:active{ background:var(--panel-3); }
+  .onboard-opt-t{ font-size:14px; font-weight:600; color:var(--text); }
+  .onboard-opt-d{ font-size:12px; color:var(--muted); }
+  .onboard-help{
+    font-size:12px; line-height:1.5; color:var(--dim); text-align:center;
+    margin:16px 0 0;
+  }
+  .onboard-help a{ color:var(--live); }
+  .onboard-help b{ color:var(--muted); font-family:'IBM Plex Mono', monospace; }
+  .onboard-skip{
+    display:block; margin:10px auto 0; padding:6px 10px;
+    background:none; border:none; cursor:pointer;
+    color:var(--dim); font-family:inherit; font-size:12px; text-decoration:underline;
+  }
+  .onboard-skip:active{ color:var(--muted); }
 
   /* ---------------- rotate lock ---------------- */
   /* Web pages can't truly lock orientation outside fullscreen, so a phone turned

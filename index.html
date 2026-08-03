@@ -62,7 +62,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260802">
+<link rel="stylesheet" href="style.css?v=20260803c">
 </head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WL72320DHV"></script>
@@ -90,6 +90,7 @@
       <div class="key-select">
         <select id="keySelect" aria-label="Key"></select>
       </div>
+      <button class="icon-btn" id="helpBtn" aria-label="How to play">?</button>
       <button class="gear-btn" id="gearBtn" aria-label="Settings"><span></span></button>
     </div>
   </header>
@@ -103,9 +104,9 @@
       <div class="setting-row stack">
         <span>Scale notes on the neck</span>
         <div class="segmented" id="noteVisibilitySeg">
-          <button class="seg-btn" data-val="numerals">Numerals</button>
+          <button class="seg-btn active" data-val="numerals">Numerals</button>
           <button class="seg-btn" data-val="dots">Dots only</button>
-          <button class="seg-btn active" data-val="hidden">Hidden</button>
+          <button class="seg-btn" data-val="hidden">Hidden</button>
         </div>
       </div>
       <div class="setting-row">
@@ -182,6 +183,43 @@
     </div>
   </div>
 
+  <div class="howto" id="howto" role="dialog" aria-modal="true" aria-label="How to play">
+    <div class="howto-card">
+      <button class="howto-close" id="howtoClose" aria-label="Close">×</button>
+      <h2>How to play</h2>
+      <ol class="howto-steps">
+        <li><b>Find</b> shows the scale degree to locate; <b>Current</b> is where you are.</li>
+        <li>Tap that degree anywhere on the neck — several spots count.</li>
+        <li>A correct tap plays the real note and moves you on. Build a streak.</li>
+      </ol>
+      <p class="howto-hint">Change the key, hide the note labels to make it harder, or try Time Attack.</p>
+      <a class="howto-guide" href="/help">Read the full guide &amp; why the major scale matters →</a>
+    </div>
+  </div>
+
+  <div class="onboard" id="onboard" role="dialog" aria-modal="true" aria-label="Choose your starting difficulty">
+    <div class="onboard-card">
+      <h2>Welcome to Fretboardwalk</h2>
+      <p class="onboard-sub">How well can you already find the notes of the major scale on the neck? Pick a starting point — you can change it anytime in settings.</p>
+      <div class="onboard-opts">
+        <button class="onboard-opt" data-val="numerals" type="button">
+          <span class="onboard-opt-t">New to this</span>
+          <span class="onboard-opt-d">Show the degree numbers right on the neck</span>
+        </button>
+        <button class="onboard-opt" data-val="dots" type="button">
+          <span class="onboard-opt-t">Getting there</span>
+          <span class="onboard-opt-d">Show the positions, but hide the numbers</span>
+        </button>
+        <button class="onboard-opt" data-val="hidden" type="button">
+          <span class="onboard-opt-t">Confident</span>
+          <span class="onboard-opt-d">Hide everything — test my recall</span>
+        </button>
+      </div>
+      <p class="onboard-help">New to this? The <a href="/help">quick guide</a> explains how it works and why the major scale matters — reach it anytime from the <b>?</b> button.</p>
+      <button class="onboard-skip" id="onboardSkip" type="button">Just let me play</button>
+    </div>
+  </div>
+
 </div>
 
 <div class="rotate-lock">
@@ -190,7 +228,7 @@
   <p>Fretboardwalk runs the neck vertically, so it needs portrait. Rotate back to carry on.</p>
 </div>
 
-<script src="script.js?v=20260802"></script>
+<script src="script.js?v=20260803c"></script>
 
 </body>
 </html>
