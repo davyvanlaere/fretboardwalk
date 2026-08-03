@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="help.css?v=20260803">
+<link rel="stylesheet" href="help.css?v=20260804">
 
 <script type="application/ld+json">
 {
@@ -51,6 +51,16 @@
       "@type": "Question",
       "name": "Why learn scale degrees instead of just note names?",
       "acceptedAnswer": { "@type": "Answer", "text": "Note names change with every key; scale degrees do not. Thinking in degrees lets you transpose songs, understand chord progressions like I–IV–V, build chords, and target notes in a solo — skills that carry across all 12 keys instead of being memorized one key at a time." }
+    },
+    {
+      "@type": "Question",
+      "name": "Shouldn't I learn the pentatonic scale first?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Many players do, and that's fine — the pentatonic is only five notes and gets you soloing quickly. But it isn't a rival to the major scale; it's a subset of it. The major pentatonic is just the major scale with the 4th and 7th removed, so understanding the major scale is what makes the pentatonic make sense." }
+    },
+    {
+      "@type": "Question",
+      "name": "What about the minor scale?",
+      "acceptedAnswer": { "@type": "Answer", "text": "The natural minor scale is the major scale with three lowered degrees: a flat 3rd, flat 6th and flat 7th. The flat 3rd is what makes it sound sad instead of happy. Every minor key also shares its exact notes with a major key, so once the major scale is solid, minor is a small adjustment rather than a new set of shapes." }
     },
     {
       "@type": "Question",
@@ -89,8 +99,8 @@
       </label>
     </div>
     <div class="hear-btns">
-      <button class="hear-btn" id="playMajor" type="button"><span class="tri"></span>Major scale</button>
-      <button class="hear-btn" id="playPent" type="button"><span class="tri"></span>Major pentatonic</button>
+      <button class="hear-btn" data-scale="major" type="button"><span class="tri"></span>Major scale</button>
+      <button class="hear-btn" data-scale="majorPent" type="button"><span class="tri"></span>Major pentatonic</button>
     </div>
     <p class="hear-note">Real guitar, same sound as the trainer. The <strong>major pentatonic</strong> is just the major scale with the 4th and 7th taken out — five notes instead of seven.</p>
   </div>
@@ -118,6 +128,7 @@
 
   <h2>What are scale degrees?</h2>
   <p>A <strong>scale degree</strong> is just a number that names a note by its place in the scale instead of by its letter. The major scale has seven notes, so we number them <span class="deg">1</span> through <span class="deg">7</span>. In C major that looks like this:</p>
+  <p style="margin-top:-4px"><a href="/scale-degrees">New to this? Read the full beginner's guide to scale degrees →</a></p>
 
   <div class="scale-wrap">
     <table class="scale-table">
@@ -178,10 +189,16 @@
     <p>No. Everything happens on the fretboard and by ear — you tap frets and hear the real note. No notation required.</p>
 
     <h3>What exactly is a scale degree?</h3>
-    <p>A number (1–7) that names a note by its position in the scale rather than its letter. In C major, C is the <span class="deg root">1</span>, D is the <span class="deg">2</span>, and so on — and those numbers stay the same in every key.</p>
+    <p>A number (1–7) that names a note by its position in the scale rather than its letter. In C major, C is the <span class="deg root">1</span>, D is the <span class="deg">2</span>, and so on — and those numbers stay the same in every key. For a full beginner walkthrough, see <a href="/scale-degrees">scale degrees explained</a>.</p>
 
     <h3>Why learn degrees instead of note names?</h3>
     <p>Note names change with every key; degrees don't. Thinking in degrees lets you transpose, understand chord progressions, build chords, and target solo notes — skills that work across all 12 keys at once.</p>
+
+    <h3>Shouldn't I learn the pentatonic scale first?</h3>
+    <p>Many players do, and that's fine — it's only five notes and gets you soloing fast. But the pentatonic isn't a rival to the major scale; it's a <em>piece</em> of it (the major pentatonic is the major scale minus the 4th and 7th). More on how they fit together in the <a href="/pentatonic-scale">pentatonic scale guide</a>.</p>
+
+    <h3>What about the minor scale?</h3>
+    <p>The natural minor scale is just the major scale with three lowered degrees (<span class="deg">♭3</span> <span class="deg">♭6</span> <span class="deg">♭7</span>) — the <span class="deg">♭3</span> is what makes it sound sad. See the <a href="/minor-scale">minor scale guide</a> for how it relates to major.</p>
 
     <h3>Which key should I start in?</h3>
     <p>C major — no sharps or flats, so the relationships are easiest to see. Then switch keys to test that you really understand the pattern.</p>
@@ -203,7 +220,7 @@
   <a href="/">Open the trainer →</a>
 </footer>
 
-<script src="help.js?v=20260803b"></script>
+<script src="help.js?v=20260804"></script>
 
 </body>
 </html>

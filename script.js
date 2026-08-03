@@ -958,20 +958,17 @@
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeHowto(); });
 
   // ---------- first-visit onboarding ----------
-  // Shows the difficulty picker exactly once per browser. Anyone who already
-  // used the app (has saved settings) is treated as onboarded, so returning
-  // users are never interrupted. Storage failures just skip it silently.
+  // Shows the difficulty picker whenever this single flag is absent, and sets
+  // it once a choice (or skip) is made — so it appears exactly once, then never
+  // again. Clearing this one key (or ?init=true) brings it back. Storage
+  // failures just skip it silently.
   const ONBOARDED_KEY = 'fretboardwalk.onboarded';
   function markOnboarded(){ try{ localStorage.setItem(ONBOARDED_KEY, '1'); }catch(e){} }
   function shouldOnboard(){
     // ?init=true force-shows the picker regardless of the saved flag — handy
     // for testing without clearing storage.
     try{ if(new URLSearchParams(location.search).get('init') === 'true') return true; }catch(e){}
-    try{
-      if(localStorage.getItem(ONBOARDED_KEY)) return false;
-      if(localStorage.getItem(SETTINGS_KEY)){ markOnboarded(); return false; }
-      return true;
-    }catch(e){ return false; }
+    try{ return !localStorage.getItem(ONBOARDED_KEY); }catch(e){ return false; }
   }
   function finishOnboarding(mode){
     if(mode){

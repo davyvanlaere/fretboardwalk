@@ -116,6 +116,25 @@ li{ margin:0 0 8px; }
 .hear-note{ font-size:13px; color:var(--muted); margin:0; line-height:1.55; }
 .hear-note strong{ color:var(--text); }
 
+/* diagrams (inline SVG figures) */
+figure.fig{ margin:24px 0; }
+figure.fig svg{
+  display:block; width:100%; height:auto;
+  background:var(--panel); border:1px solid var(--line); border-radius:12px;
+}
+figure.fig figcaption{
+  margin-top:9px; font-size:13px; line-height:1.55; color:var(--muted); text-align:center;
+}
+.fig text{ font-family:'IBM Plex Mono', monospace; }
+
+/* one-line takeaway callout */
+.keyline{
+  border-left:3px solid var(--live); background:rgba(34,211,238,.06);
+  border-radius:0 10px 10px 0; padding:12px 16px; margin:18px 0;
+  font-size:16px; color:var(--text);
+}
+.keyline strong{ color:var(--live); }
+
 /* steps */
 ol.steps{ counter-reset:step; list-style:none; padding-left:0; }
 ol.steps > li{

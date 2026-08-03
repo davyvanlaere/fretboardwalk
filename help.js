@@ -44,9 +44,15 @@
     {name:'B♭ major', pc:10}, {name:'F major',  pc:5},
   ];
 
-  // Scale-degree offsets from the root, in semitones.
-  const MAJOR = [0, 2, 4, 5, 7, 9, 11, 12];
-  const MAJOR_PENT = [0, 2, 4, 7, 9, 12];   // major scale minus the 4th and 7th
+  // Scale-degree offsets from the root, in semitones. A button picks one by
+  // name via its data-scale attribute, so any page can offer whichever scales
+  // it's explaining.
+  const SCALES = {
+    major:        [0, 2, 4, 5, 7, 9, 11, 12],
+    majorPent:    [0, 2, 4, 7, 9, 12],          // major scale minus the 4th and 7th
+    minorPent:    [0, 3, 5, 7, 10, 12],         // 1 ♭3 4 5 ♭7
+    naturalMinor: [0, 2, 3, 5, 7, 8, 10, 12],   // major with ♭3 ♭6 ♭7
+  };
 
   // Root sits in a comfortable low octave (C3 = MIDI 48). Each scale note is a
   // real position {string, fret} on one string, played the game's way.
@@ -128,38 +134,33 @@
   }
 
   // ---- wiring ----
+  // Data-driven: each page supplies a #hearKey select and any number of
+  // .hear-btn buttons carrying data-scale="major|majorPent|minorPent|naturalMinor".
   const keySel = document.getElementById('hearKey');
-  const btnMajor = document.getElementById('playMajor');
-  const btnPent = document.getElementById('playPent');
-  if(!keySel || !btnMajor || !btnPent) return;
+  const btns = Array.from(document.querySelectorAll('.hear-btn[data-scale]'));
+  if(!keySel || !btns.length) return;
 
-  KEYS.forEach((k, i) => {
+  KEYS.forEach((k) => {
     const opt = document.createElement('option');
     opt.value = k.pc; opt.textContent = k.name;
     keySel.appendChild(opt);
   });
 
   let busy = false;
-  async function play(btn, offsets){
+  function setDisabled(v){ btns.forEach(b => b.disabled = v); }
+  async function play(btn){
     if(busy) return;
+    const offsets = SCALES[btn.dataset.scale];
+    if(!offsets) return;
     busy = true;
-    btnMajor.disabled = true; btnPent.disabled = true;
+    setDisabled(true);
     btn.classList.add('playing');
+    const release = () => { busy = false; setDisabled(false); btn.classList.remove('playing'); };
     try{
-      const rootPc = +keySel.value;
-      const dur = await playSequence(scalePositions(rootPc, offsets));
-      setTimeout(() => {
-        busy = false;
-        btnMajor.disabled = false; btnPent.disabled = false;
-        btn.classList.remove('playing');
-      }, dur * 1000 + 350);
-    }catch(e){
-      busy = false;
-      btnMajor.disabled = false; btnPent.disabled = false;
-      btn.classList.remove('playing');
-    }
+      const dur = await playSequence(scalePositions(+keySel.value, offsets));
+      setTimeout(release, dur * 1000 + 350);
+    }catch(e){ release(); }
   }
 
-  btnMajor.addEventListener('click', () => play(btnMajor, MAJOR));
-  btnPent.addEventListener('click', () => play(btnPent, MAJOR_PENT));
+  btns.forEach(b => b.addEventListener('click', () => play(b)));
 })();
