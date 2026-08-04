@@ -52,6 +52,15 @@ body{
 }
 .open-app:hover{ background:#4fe0f4; }
 
+/* breadcrumbs */
+.crumbs{ margin:8px 0 2px; }
+.crumbs ol{ list-style:none; display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:0; margin:0; font-size:13px; }
+.crumbs li{ display:flex; align-items:center; gap:7px; color:var(--muted); }
+.crumbs li + li::before{ content:"›"; color:var(--dim); }
+.crumbs a{ color:var(--muted); text-decoration:none; }
+.crumbs a:hover{ color:var(--text); text-decoration:underline; }
+.crumbs [aria-current="page"]{ color:var(--text); }
+
 /* headings */
 h1{ font-size:34px; line-height:1.2; letter-spacing:-.02em; margin:14px 0 6px; }
 h2{ font-size:23px; line-height:1.25; letter-spacing:-.01em; margin:44px 0 10px; }

@@ -28,8 +28,9 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="help.css?v=20260804">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"></noscript>
+<link rel="stylesheet" href="help.css?v=20260804b">
 
 <script type="application/ld+json">
 {
@@ -49,6 +50,17 @@
   ]
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://fretboardwalk.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guide", "item": "https://fretboardwalk.com/help" },
+    { "@type": "ListItem", "position": 3, "name": "Minor scale", "item": "https://fretboardwalk.com/minor-scale" }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -62,7 +74,13 @@
 
 <main class="wrap">
 
-  <p style="margin:6px 0 0"><a href="/help" style="font-size:13px;color:var(--muted);text-decoration:none">← Back to the guide</a></p>
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <ol>
+      <li><a href="/">Home</a></li>
+      <li><a href="/help">Guide</a></li>
+      <li aria-current="page">Minor scale</li>
+    </ol>
+  </nav>
 
   <h1>The minor scale, explained</h1>
   <p class="lede">Minor is the "sad" or "dark" cousin of the major scale — the sound behind most emotional, moody and heavy music. The good news for a beginner: it isn't a whole new thing to learn. It's the major scale with a few notes nudged down.</p>
@@ -132,7 +150,7 @@
       <tr><th>A minor</th><td>A</td><td>B</td><td>C</td><td>D</td><td>E</td><td>F</td><td>G</td></tr>
     </table>
   </div>
-  <p>Same notes, same fretboard shapes — only "home" moves. That pairing is called the <strong>relative major and relative minor</strong>, and it's why every scale shape you learn works for two keys at once.</p>
+  <p>Same notes, same fretboard shapes — only "home" moves. That pairing is called the <strong>relative major and relative minor</strong>, and it's why every scale shape you learn works for two keys at once. You can see both keys on one neck at once in the <a href="/major-minor-degree-map">major/minor degree map</a>.</p>
 
   <div class="card accent">
     <p style="margin:0"><strong>On the guitar</strong>, this means you don't learn separate minor shapes from scratch. The same patterns Fretboardwalk drills in a major key are the minor scale too — you just hear a different note as the centre. Flip on the <em>include lowered degrees</em> option in the trainer to start folding <span class="deg">♭3</span> <span class="deg">♭6</span> <span class="deg">♭7</span> into your practice.</p>
@@ -194,6 +212,7 @@
 
 <footer>
   <span>© Fretboardwalk</span>
+  <a href="/about">About</a>
   <a href="/">Open the trainer →</a>
 </footer>
 

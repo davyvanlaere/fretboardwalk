@@ -29,8 +29,9 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="help.css?v=20260804">
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"></noscript>
+<link rel="stylesheet" href="help.css?v=20260804b">
 
 <script type="application/ld+json">
 {
@@ -75,6 +76,16 @@
   ]
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://fretboardwalk.com/" },
+    { "@type": "ListItem", "position": 2, "name": "Guide", "item": "https://fretboardwalk.com/help" }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -87,6 +98,13 @@
 </div>
 
 <main class="wrap">
+
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <ol>
+      <li><a href="/">Home</a></li>
+      <li aria-current="page">Guide</li>
+    </ol>
+  </nav>
 
   <h1>How Fretboardwalk works — and why the major scale matters</h1>
   <p class="lede">Fretboardwalk is a free trainer that teaches you where every note and scale degree lives on the guitar neck — in any key. This guide explains how to play and why the major scale is the single most useful thing a beginning guitarist can learn.</p>
@@ -182,6 +200,7 @@
     <li><strong>Change keys once a mode feels easy.</strong> Switching keys proves you learned the <em>pattern</em>, not a fixed set of dots in one spot.</li>
     <li><strong>Keep sessions short.</strong> A few focused minutes a day beats one long grind. Use Time Attack to check whether your recall is actually getting faster.</li>
   </ul>
+  <p>Still shaky on the plain note names (which fret is a C?) before you even get to degrees? Start with <a href="/memorize-the-fretboard">how to memorize the guitar fretboard</a> — the method and a full notes chart.</p>
 
   <h2 class="faq-title">FAQ</h2>
   <div class="faq">
@@ -217,6 +236,7 @@
 
 <footer>
   <span>© Fretboardwalk</span>
+  <a href="/about">About</a>
   <a href="/">Open the trainer →</a>
 </footer>
 
