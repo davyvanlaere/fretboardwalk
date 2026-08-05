@@ -22,7 +22,9 @@ test.describe('time attack', () => {
 
     await expect(page.locator('#streakBox .l')).toHaveText('score');
     await expect(page.locator('#streakVal')).toHaveText('0');
-    await expect(page.locator('.key-select')).toBeHidden();
+    // Asserted on the attribute, not on visibility: the row lives in the
+    // settings drawer now, which is collapsed anyway on narrow screens.
+    await expect(page.locator('#keyRow')).toHaveAttribute('hidden', '');
     await expect(page.locator('#helpBtn')).toBeHidden();   // no modal over a ticking clock
     await expect(page.locator('#taStartBtn')).toHaveClass(/stopping/);
     await expect(page.locator('#curNum')).toHaveText('1');  // always restarts from the root
@@ -51,7 +53,7 @@ test.describe('time attack', () => {
 
     await expect(page.locator('#taResults')).not.toHaveClass(/open/);
     await expect(page.locator('#streakBox .l')).toHaveText('streak');
-    await expect(page.locator('.key-select')).toBeVisible();
+    await expect(page.locator('#keyRow')).not.toHaveAttribute('hidden', '');
     await expect(page.locator('#taBarTrack')).toBeHidden();
     // The practice run it interrupted is handed back intact.
     expect(await H.streak(page)).toBe('2');

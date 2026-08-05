@@ -84,6 +84,7 @@ test.describe('board and scoring', () => {
   test('changing key restarts the walk and remaps every degree', async ({ page }) => {
     await H.gotoPlaying(page);
     await H.playCorrect(page, 2);
+    await openSettings(page);   // the key lives in here now, not the header
 
     // In C major the open low E string (fret 0) is the 3rd; in A major it's the 5th.
     const degreeAtOpenE = () => page.evaluate(() =>

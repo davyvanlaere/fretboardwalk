@@ -66,6 +66,23 @@ test.describe('first-visit gate', () => {
     await expect(page.locator(tour)).not.toHaveClass(/open/);
   });
 
+  test('the ? button surfaces the degree cycle, not just the tour', async ({ page }) => {
+    // 7 3 6 2 5 1 4 is the technique that makes Dots and Hidden mode realistic,
+    // and it used to be reachable only from /about. It belongs one tap from the
+    // board — this is here to stop it drifting back out of reach.
+    await H.gotoPlaying(page);
+    await page.locator('#helpBtn').click();
+
+    const map = page.locator('.howto-map');
+    await expect(map).toBeVisible();
+    await expect(map).toHaveAttribute('href', '/major-minor-degree-map');
+    await expect(map.locator('b')).toHaveText('7 3 6 2 5 1 4');
+    // Leaving the app mid-session would silently reset the streak.
+    for (const sel of ['.howto-map', '.howto-guide']) {
+      await expect(page.locator(sel)).toHaveAttribute('target', '_blank');
+    }
+  });
+
   test('the tour stays reachable from the ? button after declining', async ({ page }) => {
     await H.gotoFirstVisit(page);
     await page.locator('#gateNo').click();

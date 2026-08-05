@@ -81,7 +81,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"></noscript>
-<link rel="stylesheet" href="style.css?v=20260805d">
+<link rel="stylesheet" href="style.css?v=20260805h">
 </head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WL72320DHV"></script>
@@ -106,9 +106,6 @@
         <span class="v" id="streakVal">0</span><span class="l">streak</span>
         <span class="combo-burst" id="comboBurst" aria-hidden="true"></span>
       </div>
-      <div class="key-select">
-        <select id="keySelect" aria-label="Key"></select>
-      </div>
       <button class="icon-btn" id="helpBtn" aria-label="How to play">?</button>
       <button class="gear-btn" id="gearBtn" aria-label="Settings"><span></span></button>
     </div>
@@ -120,12 +117,24 @@
 
   <div class="settings" id="settingsDrawer">
     <div class="settings-inner">
+      <!-- Always first: this is the difficulty dial the whole app is built
+           around, it's what the tour's closing step points at, and it's what
+           the streak nudge offers to change. -->
       <div class="setting-row stack">
         <span>Scale notes on the neck</span>
         <div class="segmented" id="noteVisibilitySeg">
           <button class="seg-btn active" data-val="numerals">Numerals</button>
           <button class="seg-btn" data-val="dots">Dots only</button>
           <button class="seg-btn" data-val="hidden">Hidden</button>
+        </div>
+      </div>
+      <!-- Hidden outright during a Time Attack run: the desktop rail stays on
+           screen throughout, and changing key mid-run would reset the walk out
+           from under a live countdown. -->
+      <div class="setting-row" id="keyRow">
+        <span>Key</span>
+        <div class="key-select">
+          <select id="keySelect" aria-label="Key"></select>
         </div>
       </div>
       <div class="setting-row">
@@ -213,7 +222,14 @@
       </ol>
       <p class="howto-hint">Change the key, hide the note labels to make it harder, or try Time Attack.</p>
       <button class="howto-tour" id="howtoTourBtn" type="button">Take the quick tour</button>
-      <a class="howto-guide" href="/help">Read the full guide &amp; why the major scale matters →</a>
+      <!-- The technique that makes Dots and Hidden mode achievable, and it was
+           reachable only from /about and a passing line in /minor-scale. Given
+           the number itself as the hook, since that's what makes it stick. -->
+      <a class="howto-map" href="/major-minor-degree-map" target="_blank" rel="noopener">
+        <b>7 3 6 2 5 1 4</b>
+        <span>The order degrees stack across the strings — find any of them without counting</span>
+      </a>
+      <a class="howto-guide" href="/help" target="_blank" rel="noopener">Read the full guide &amp; why the major scale matters →</a>
     </div>
   </div>
 
@@ -222,8 +238,9 @@
        whatsoever, unlike a difficulty choice. -->
   <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
     <div class="gate-card">
-      <h2 id="gateTitle">Welcome to Fretboardwalk</h2>
-      <p class="gate-sub">It names a note of the scale, you find it on the guitar neck, and it plays the real thing. That's the whole app.</p>
+      <h2 id="gateTitle">Know the neck, not just the shapes</h2>
+      <p class="gate-sub">Most guitarists memorise a few shapes and hope. Fretboardwalk trains the thing underneath them — knowing where you are anywhere on the neck, in any key.</p>
+      <p class="gate-how">You're shown a number, you find it, you hear the real note. Free, no sign-up.</p>
       <button class="gate-yes" id="gateYes" type="button">
         Show me how it works
         <span class="gate-yes-sub">Under a minute, on the real neck</span>
@@ -270,7 +287,7 @@
   <p>Fretboardwalk runs the neck vertically, so it needs portrait. Rotate back to carry on.</p>
 </div>
 
-<script src="script.js?v=20260805c"></script>
+<script src="script.js?v=20260805d"></script>
 
 </body>
 </html>

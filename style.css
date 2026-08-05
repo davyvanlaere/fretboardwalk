@@ -75,31 +75,35 @@
     background:var(--panel);
     border-bottom:1px solid var(--line);
   }
-  .brand{ display:flex; align-items:center; gap:9px; min-width:0; }
+  /* Sizes here spend the width the key selector used to take. The floor is a
+     360px phone, where the title has to stay un-truncated — see the small-screen
+     block below, which walks them back rather than letting "Fretboardwalk"
+     become "Fretboard…" again. */
+  .brand{ display:flex; align-items:center; gap:10px; min-width:0; }
   .logo{
-    width:26px; height:26px; flex:0 0 auto; border-radius:7px;
+    width:31px; height:31px; flex:0 0 auto; border-radius:8px;
     background:linear-gradient(145deg, var(--live), var(--live-deep));
     display:flex; align-items:center; justify-content:center;
     color:#04212a;
   }
-  .logo svg{ width:19px; height:19px; display:block; }
+  .logo svg{ width:23px; height:23px; display:block; }
   .brand h1{
-    font-size:16px; font-weight:600; letter-spacing:-.015em; margin:0;
+    font-size:17px; font-weight:600; letter-spacing:-.015em; margin:0;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  .header-right{ display:flex; align-items:center; gap:7px; flex:0 0 auto; }
+  .header-right{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
 
   /* streak now lives up here, so the board keeps the vertical space */
   .streak{
     position:relative;   /* anchors the combo burst that floats above it */
     display:flex; align-items:baseline; gap:5px;
     background:var(--panel-2); border:1px solid var(--line);
-    border-radius:8px; padding:6px 9px;
+    border-radius:9px; padding:8px 11px;
     font-family:'IBM Plex Mono', monospace;
     transition:border-color .2s, box-shadow .2s;
   }
-  .streak .v{ font-size:13px; font-weight:600; color:var(--text); line-height:1; display:inline-block; }
-  .streak .l{ font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+  .streak .v{ font-size:14.5px; font-weight:600; color:var(--text); line-height:1; display:inline-block; }
+  .streak .l{ font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
 
   /* Escalating "heat" as the combo climbs — colour + glow only, never audio,
      so the note you hear stays the true pitch. Tiers at 5 / 10 / 25. */
@@ -130,13 +134,17 @@
   }
   .combo-burst.go{ animation:comboBurstRise .8s ease-out; }
 
-  .key-select{ position:relative; }
+  /* Lives in the settings drawer rather than the header: changing key is a
+     set-and-forget choice, and the header space is worth more to the title,
+     which was truncating on phones. */
+  .key-select{ position:relative; flex:0 0 auto; }
   .key-select select{
     appearance:none; -webkit-appearance:none;
-    background:var(--panel-2); border:1px solid var(--line);
+    background:var(--bg); border:1px solid var(--line);
     color:var(--text); font-family:'IBM Plex Mono', monospace; font-size:12px;
-    padding:7px 24px 7px 10px; border-radius:8px; cursor:pointer;
+    padding:8px 26px 8px 11px; border-radius:8px; cursor:pointer;
   }
+  #keyRow[hidden]{ display:none; }
   .key-select::after{
     content:''; position:absolute; right:9px; top:50%;
     width:5px; height:5px; margin-top:-4px;
@@ -144,27 +152,56 @@
     transform:rotate(45deg); pointer-events:none;
   }
   .gear-btn{
-    width:32px; height:32px; flex:0 0 auto;
+    width:37px; height:37px; flex:0 0 auto;
     display:flex; align-items:center; justify-content:center;
     background:var(--panel-2); border:1px solid var(--line);
-    border-radius:8px; cursor:pointer;
+    border-radius:9px; cursor:pointer;
   }
   .gear-btn span{
-    display:block; width:14px; height:1.5px; background:var(--muted);
-    box-shadow:0 -4.5px 0 var(--muted), 0 4.5px 0 var(--muted);
+    display:block; width:16px; height:1.6px; background:var(--muted);
+    box-shadow:0 -5px 0 var(--muted), 0 5px 0 var(--muted);
   }
   /* Help "?" button — shares the gear button's chrome so the header controls
      read as a set. */
   .icon-btn{
-    width:32px; height:32px; flex:0 0 auto;
+    width:37px; height:37px; flex:0 0 auto;
     display:flex; align-items:center; justify-content:center;
     background:var(--panel-2); border:1px solid var(--line);
-    border-radius:8px; cursor:pointer;
+    border-radius:9px; cursor:pointer;
     color:var(--muted); font-family:'IBM Plex Mono', monospace;
-    font-size:15px; font-weight:600; line-height:1; padding:0;
+    font-size:17px; font-weight:600; line-height:1; padding:0;
   }
   .icon-btn:active{ background:var(--panel-3); }
   .icon-btn[hidden]{ display:none; }
+
+  /* Narrow Androids (360px) and the odd 320px viewport don't have room for the
+     enlarged header — measured, not guessed: at those widths "Fretboardwalk"
+     starts ellipsing again, which is the thing the extra space was freed up to
+     fix. Step the whole set back rather than let the brand lose. */
+  @media (max-width:374px){
+    .brand{ gap:8px; }
+    .logo{ width:27px; height:27px; border-radius:7px; }
+    .logo svg{ width:20px; height:20px; }
+    .brand h1{ font-size:15.5px; }
+    .header-right{ gap:6px; }
+    .streak{ padding:6px 9px; border-radius:8px; }
+    .streak .v{ font-size:13px; }
+    .streak .l{ font-size:9px; }
+    .icon-btn, .gear-btn{ width:33px; height:33px; border-radius:8px; }
+    .icon-btn{ font-size:15px; }
+    .gear-btn span{
+      width:14px; height:1.5px;
+      box-shadow:0 -4.5px 0 var(--muted), 0 4.5px 0 var(--muted);
+    }
+  }
+
+  /* A 320px viewport lands 7px short even after the step-down above, and the
+     controls are already at their sensible floor — so the last few pixels come
+     out of the gutters instead. */
+  @media (max-width:339px){
+    header{ padding-left:10px; padding-right:10px; }
+    .header-right{ gap:5px; }
+  }
 
   /* ---------------- time attack bar ---------------- */
   /* Sits outside .stage/.board-area on purpose — a fixed-position strip here
@@ -429,6 +466,20 @@
     font-size:13px; font-weight:600; padding:11px 12px;
   }
   .howto-tour:active{ background:var(--panel-3); }
+  /* The sequence gets to be its own headline rather than a sentence with a link
+     buried in it — the number is the memorable part, so it leads. Amber ties it
+     to the "find this" colour used on the board. */
+  .howto-map{
+    display:block; width:100%; margin:0 0 9px; text-align:center; text-decoration:none;
+    background:var(--panel-2); border:1px solid var(--line-strong); border-radius:9px;
+    padding:10px 12px;
+  }
+  .howto-map b{
+    display:block; font-family:'IBM Plex Mono', monospace;
+    font-size:15px; font-weight:600; letter-spacing:.18em; color:var(--seek);
+  }
+  .howto-map span{ display:block; font-size:11.5px; line-height:1.45; color:var(--muted); margin-top:4px; }
+  .howto-map:active{ background:var(--panel-3); }
   .howto-guide{
     display:block; text-align:center; text-decoration:none;
     font-size:13px; font-weight:600; color:#04212a; background:var(--live);
@@ -452,8 +503,12 @@
     padding:24px 20px 18px;
     box-shadow:0 24px 60px rgba(0,0,0,.6);
   }
-  .gate-card h2{ font-size:18px; margin:0 0 9px; }
-  .gate-sub{ font-size:13px; line-height:1.55; color:var(--muted); margin:0 0 20px; }
+  /* Two lines doing two jobs: the first answers "is this worth my time", the
+     second answers "what actually happens" and prices it at zero. A first
+     visitor is deciding, not reading. */
+  .gate-card h2{ font-size:19px; line-height:1.3; margin:0 0 10px; letter-spacing:-.015em; }
+  .gate-sub{ font-size:13px; line-height:1.55; color:var(--muted); margin:0 0 9px; }
+  .gate-how{ font-size:12px; line-height:1.5; color:var(--dim); margin:0 0 20px; }
   .gate-yes{
     display:flex; flex-direction:column; gap:3px; width:100%;
     background:var(--live); border:none; border-radius:11px; cursor:pointer;
@@ -636,13 +691,14 @@
     .app{ max-width:1500px; max-height:840px; height:calc(100dvh - 60px); border-radius:16px; }
 
     header{ padding:16px 24px; }
-    .brand h1{ font-size:19px; }
-    .logo{ width:30px; height:30px; }
-    .logo svg{ width:22px; height:22px; }
+    .brand h1{ font-size:21px; }
+    .logo{ width:35px; height:35px; border-radius:9px; }
+    .logo svg{ width:26px; height:26px; }
     .gear-btn{ display:none; }
-    .key-select select{ font-size:13px; padding:9px 28px 9px 12px; }
-    .streak{ padding:8px 12px; }
-    .streak .v{ font-size:15px; }
+    .icon-btn{ width:40px; height:40px; font-size:18px; }
+    .streak{ padding:10px 14px; }
+    .streak .v{ font-size:17px; }
+    .streak .l{ font-size:10px; }
 
     .stage{ flex-direction:row; }
 

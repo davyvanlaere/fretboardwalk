@@ -73,7 +73,9 @@
   const settingsDrawerEl= document.getElementById('settingsDrawer');
   const restartBtnEl    = document.getElementById('restartBtn');
   const sideSlotEl      = document.getElementById('sideSlot');
-  const keySelectWrapEl = document.querySelector('.key-select');
+  // The whole settings row, not just the select: it now lives in the drawer, so
+  // hiding the control alone would leave an orphaned "Key" label behind.
+  const keyRowEl        = document.getElementById('keyRow');
   const taBarTrackEl    = document.getElementById('taBarTrack');
   const taBarFillEl     = document.getElementById('taBarFill');
   const taStartBtnEl    = document.getElementById('taStartBtn');
@@ -839,7 +841,7 @@
     // won't move the goalposts on which board this score lands in.
     timeAttack.mode = state.noteDisplay;
 
-    keySelectWrapEl.hidden = true;
+    keyRowEl.hidden = true;
     helpBtnEl.hidden = true;     // a modal mid-run would hide a ticking clock
     setTimeAttackButton(true);   // same tile becomes the Stop control
 
@@ -922,7 +924,7 @@
       state.streak = snap.streak;
     }
 
-    keySelectWrapEl.hidden = false;
+    keyRowEl.hidden = false;
     helpBtnEl.hidden = false;
     setTimeAttackButton(false);
     streakLabelEl.textContent = 'streak';
