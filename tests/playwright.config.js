@@ -14,7 +14,7 @@ module.exports = defineConfig({
   // means eight browsers competing for the same animation frames. The tap-heavy
   // specs then time out on contention alone — they pass comfortably in
   // isolation. Fewer workers is both faster overall and stable.
-  workers: process.env.CI ? 2 : 4,
+  workers: process.env.CI ? 2 : 3,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],

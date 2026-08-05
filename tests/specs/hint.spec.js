@@ -285,8 +285,14 @@ test.describe('the "how do I find it" hint', () => {
     // Fret numbers grow downward on the neck, so the figure's top branch has to
     // be the LOWER fret. Checked against the board rather than against pitch —
     // getting this backwards is invisible unless you compare the two.
+    //
+    // The fork only appears on the 4-to-7 join, so park on a 4 or a 7 first
+    // rather than waiting for one to come round: that lifts the rate from 10%
+    // of turns to 29%, and twenty samples puts a run with none at about 1 in
+    // 800. Playing at random needed 26 turns for a 1-in-4 chance of failing.
     let checked = 0;
-    for (let i = 0; i < 26 && checked < 2; i++) {
+    for (let i = 0; i < 20 && checked < 2; i++) {
+      await H.playUntilTargetIn(page, ['4', '7']);
       await openHint(page);
 
       if (await page.locator('.hint-branch').count()) {
@@ -327,9 +333,8 @@ test.describe('the "how do I find it" hint', () => {
       }
 
       await page.locator('#hintCloseBtn').click();
-      await H.tapDegree(page, await H.currentTarget(page), { onString: i % 6 });
     }
-    expect(checked, 'expected some edge-case forks in 26 turns').toBeGreaterThan(0);
+    expect(checked, 'expected some edge-case forks while standing on 4s and 7s').toBeGreaterThan(0);
   });
 
   test('calls out the G-to-B gap when the route crosses it', async ({ page }) => {
