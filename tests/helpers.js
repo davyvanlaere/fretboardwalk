@@ -110,9 +110,46 @@ async function tapDegree(page, degree, opts = {}) {
   const n = await cells.count();
   if (!n) throw new Error(`no cell exists for degree "${degree}"`);
 
-  // Middle of the pack in DOM order: away from the nut and the top string,
-  // where a cell is most likely to sit under the header or off the end.
-  const cell = cells.nth(Math.floor(n / 2));
+  // Middle of the pack in DOM order by default: away from the nut and the top
+  // string, where a cell is most likely to sit under the header or off the end.
+  //
+  // `onString` moves that preference to a chosen string. Cells are generated
+  // string-major, so the default lands on the D/G strings every single time —
+  // fine for most specs, but it parks the player permanently on an inner string
+  // with a neighbour on both sides, which quietly skews anything that depends
+  // on where you're standing. Real players wander.
+  let index = Math.floor(n / 2);
+
+  // `avoid` skips cells sitting behind an overlay. The nudge toast is
+  // click-through everywhere except its two buttons — which have to stay
+  // clickable — so a note directly behind those genuinely can't be tapped until
+  // it's dismissed. That's the app behaving correctly, not a bug to route
+  // around, but a test aiming blind will hang on it.
+  if (opts.avoid) {
+    const free = await cells.evaluateAll((els, sel) => {
+      const o = document.querySelector(sel);
+      if (!o) return els.map((_, i) => i);
+      const b = o.getBoundingClientRect();
+      return els.reduce((acc, e, i) => {
+        const r = e.getBoundingClientRect();
+        const overlaps = !(r.right < b.left || r.left > b.right ||
+                           r.bottom < b.top || r.top > b.bottom);
+        if (!overlaps) acc.push(i);
+        return acc;
+      }, []);
+    }, opts.avoid);
+    if (free.length) index = free[Math.floor(free.length / 2)];
+  }
+
+  if (opts.onString !== undefined) {
+    const strings = await cells.evaluateAll((els) => els.map((e) => +e.dataset.string));
+    let best = Infinity;
+    strings.forEach((s, i) => {
+      const d = Math.abs(s - opts.onString);
+      if (d < best) { best = d; index = i; }
+    });
+  }
+  const cell = cells.nth(index);
   const before = await streak(page);
   await cell.scrollIntoViewIfNeeded();
   await cell.click();

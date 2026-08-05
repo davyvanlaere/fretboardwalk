@@ -91,6 +91,16 @@ li{ margin:0 0 8px; }
 }
 .card.accent{ border-color:rgba(34,211,238,.35); background:linear-gradient(180deg, rgba(34,211,238,.06), transparent); }
 
+/* Optional depth. Set apart and quieter than the body so a reader can see at a
+   glance that skipping it costs them nothing — the method above already works
+   without it. */
+.aside{
+  border-left:2px solid var(--line-strong);
+  padding:2px 0 2px 15px; margin:20px 0;
+  font-size:15px; color:var(--muted);
+}
+.aside strong{ color:var(--text); }
+
 /* "Hear it" scale player */
 .hear{ margin:20px 0 26px; }
 .hear-top{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }

@@ -76,6 +76,14 @@
   // The whole settings row, not just the select: it now lives in the drawer, so
   // hiding the control alone would leave an orphaned "Key" label behind.
   const keyRowEl        = document.getElementById('keyRow');
+  const hintBoxEl       = document.getElementById('hintBox');
+  const hintAskBtnEl    = document.getElementById('hintAskBtn');
+  const hintAskDegEl    = document.getElementById('hintAskDeg');
+  const hintPanelEl     = document.getElementById('hintPanel');
+  const hintStepsEl     = document.getElementById('hintSteps');
+  const hintWarnEl      = document.getElementById('hintWarn');
+  const hintAltEl       = document.getElementById('hintAlt');
+  const hintCloseBtnEl  = document.getElementById('hintCloseBtn');
   const taBarTrackEl    = document.getElementById('taBarTrack');
   const taBarFillEl     = document.getElementById('taBarFill');
   const taStartBtnEl    = document.getElementById('taStartBtn');
@@ -91,7 +99,10 @@
   // cellsGroup/notesGroup are recreated from scratch by buildStaticBoard on
   // every layout change, so these two get reassigned there instead of cached
   // once — everything else above is a fixed node for the page's lifetime.
-  let cellsGroupEl, notesGroupEl;
+  let cellsGroupEl, notesGroupEl, hintUnderEl, hintOverEl;
+
+  // Whether the "how do I get there" route is on screen, and what it says.
+  let hint = {open:false, route:null};
 
   // ---------- state ----------
   let state = {
@@ -407,8 +418,17 @@
     // are recreated fresh right here every time this function runs.
     cellsGroupEl = el('g', {id:'cellsGroup'});
     notesGroupEl = el('g', {id:'notesGroup'});
+    // The route straddles the notes on purpose: its lines go underneath, so the
+    // note circles clip them and each leg appears to stop at the edge of a
+    // sphere rather than run across it. Rings and step labels go over the top
+    // where they have to stay readable. Both are separate from notesGroup so
+    // renderNotes can rebuild the board without erasing the route.
+    hintUnderEl  = el('g', {id:'hintUnder'});
+    hintOverEl   = el('g', {id:'hintOver'});
     frag.appendChild(cellsGroupEl);
+    frag.appendChild(hintUnderEl);
     frag.appendChild(notesGroupEl);
+    frag.appendChild(hintOverEl);
 
     svg.appendChild(frag);
 
@@ -785,6 +805,8 @@
         bumpCombo(state.streak);
       }
       setTimeout(()=>{
+        // The route was drawn for a target that's now been answered.
+        if(hint.open) closeHint();
         state.prevDegree2 = state.prevDegree;
         state.prevDegree = curDeg;
         state.current = {string:s, fret:f};
@@ -842,6 +864,9 @@
     timeAttack.mode = state.noteDisplay;
 
     keyRowEl.hidden = true;
+    // A worked answer against a running clock isn't a hint, it's the answer.
+    closeHint();
+    hintBoxEl.hidden = true;
     helpBtnEl.hidden = true;     // a modal mid-run would hide a ticking clock
     setTimeAttackButton(true);   // same tile becomes the Stop control
 
@@ -925,6 +950,7 @@
     }
 
     keyRowEl.hidden = false;
+    hintBoxEl.hidden = false;
     helpBtnEl.hidden = false;
     setTimeAttackButton(false);
     streakLabelEl.textContent = 'streak';
@@ -935,6 +961,150 @@
     renderNotes();
     renderPlaques();
     centerOn(state.current.string, state.current.fret);
+  }
+
+  // ---------- hint: how to get there ----------
+  // The method a guitarist actually uses: cross to a neighbouring string at the
+  // same fret, then slide along it. The 7 3 6 2 5 1 4 cycle is what makes the
+  // first move predictable — but it is used here only to EXPLAIN the route,
+  // never to compute it, because the rule has two exceptions that would
+  // otherwise produce confidently wrong advice:
+  //
+  //   * 4 -> 7 is an augmented fourth, the one tritone in the key, so the
+  //     same-fret note is outside the scale entirely and the 7 sits a fret up.
+  //   * G -> B is tuned a major third rather than a fourth, shifting everything
+  //     across that pair up a fret ("mind the gap").
+  //
+  // Both were verified against every in-scale position on the neck. Positions
+  // come from the same pitch maths the board is drawn with, so the arrows can't
+  // disagree with the cells underneath them; the cycle only supplies wording.
+  const CYCLE = ['7','3','6','2','5','1','4'];
+
+  // Signed fret offsets from (s,f) to `degree` on that same string, nearest
+  // first. The degree repeats every octave, so when the closest one falls off
+  // the end of the neck the one twelve frets away is still a real answer —
+  // without that, a tenth of all positions produced no hint at all.
+  function offsetsTo(s, f, degree){
+    const wantPc = (KEYS[state.keyIndex].pc + DEGREE_SEMI[degree]) % 12;
+    const havePc = (STRINGS[s].midi + f) % 12;
+    let base = ((wantPc - havePc) % 12 + 12) % 12;
+    if(base > 6) base -= 12;
+    return [base, base + 12, base - 12]
+      .filter(o => f + o >= 0 && f + o <= FRET_COUNT)
+      .sort((a, b) => Math.abs(a) - Math.abs(b));
+  }
+
+  // The route is always the same shape, because the method is: reach across at
+  // the SAME fret, then slide. Keeping the reach level is what makes it one
+  // rule instead of a special case per string pair — and the two places the
+  // rule doesn't deliver the sequence's next degree aren't dead ends, they're
+  // the two things worth memorising alongside it:
+  //
+  //   from a 4, one string lighter  -> you land between the 6 and the 7
+  //   from a 7, one string heavier  -> you land between the 4 and the 5
+  //
+  // Verified at every position on the neck. The one wrinkle is the G→B pair,
+  // which sits a fret lower than the rest, so crossing it lands you ON the
+  // lower of that pair rather than between the two.
+  const cycleStep = (from, n) => {
+    const i = CYCLE.indexOf(from);
+    return i < 0 ? null : CYCLE[((i + n) % CYCLE.length + CYCLE.length) % CYCLE.length];
+  };
+
+  function computeHintRoute(){
+    if(!layout) return null;
+    const s = state.current.string, f = state.current.fret;
+    const target = state.targetDegree;
+    const curDeg = degreeAt(s, f);
+
+    const MAX_SPAN = 3;    // three cycle steps is still countable on the strip
+    const FRET_COST = 2;   // sliding breaks your hand position; crossing doesn't
+
+    let r = null;
+    for(let ns = 0; ns <= 5; ns++){
+      const span = Math.abs(ns - s);
+      if(span > MAX_SPAN) continue;
+      const offs = offsetsTo(ns, f, target);
+      if(!offs.length) continue;
+      const cost = Math.abs(offs[0]) * FRET_COST + span;
+      // Ties go to the shorter reach, then to the thinner string — the
+      // direction a hand usually travels.
+      if(!r || cost < r.cost || (cost === r.cost && span < r.span) ||
+         (cost === r.cost && span === r.span && ns > r.ns)){
+        r = {ns, span, cost, destFret:f + offs[0],
+             dir: ns === s ? 0 : (ns > s ? 1 : -1), sameString: ns === s};
+      }
+    }
+    if(!r) return null;
+
+    r.from = {string:s, fret:f};
+    r.dest = {string:r.ns, fret:r.destFret};
+    r.curDeg = curDeg;
+    r.target = target;
+    r.cycDeg = r.sameString ? null : cycleStep(curDeg, r.dir * r.span);
+    r.gbGap = !r.sameString && Math.min(s, r.ns) <= 3 && Math.max(s, r.ns) >= 4;
+    const iCur = CYCLE.indexOf(curDeg);
+    r.tritone = iCur >= 0 && !r.sameString &&
+      (r.dir === 1 ? iCur + r.span >= CYCLE.length : iCur - r.span < 0);
+
+    // What is sitting level with you, and — when nothing is — the two degrees
+    // you've landed between.
+    const levelDeg = r.sameString ? curDeg : degreeAt(r.ns, f);
+    let between = null;
+    if(!r.sameString && !levelDeg && f > 0 && f < FRET_COUNT){
+      const lo = degreeAt(r.ns, f - 1), hi = degreeAt(r.ns, f + 1);
+      if(lo && hi) between = [lo, hi];
+    }
+    r.between = between;
+
+    // The two edge cases in the form actually worth memorising: one step across
+    // the 4-to-7 join, landing in the pair that always sits there. A longer
+    // reach can cross the same join but carries the error onward and lands
+    // somewhere else entirely — a 7 reaching two strings heavier ends up between
+    // the 1 and the 2, which is true but teaches nothing.
+    const pair = r.dir === 1 ? ['6','7'] : ['4','5'];
+    r.canonicalEdge = !!(r.tritone && between &&
+      between[0] === pair[0] && between[1] === pair[1]);
+
+    // Where the route pauses. Level with you by default — but when the
+    // sequence's degree isn't level, the route goes through it anyway, because
+    // that degree is the thing being taught. Crossing G→B doesn't break the
+    // sequence, it just displaces it a fret; describing where you happen to
+    // land instead teaches a coincidence that only holds on that one string
+    // pair. From a 5, "one string thinner is the 7" is true across G→B and
+    // false everywhere else — whereas "the sequence says 1, the gap puts it a
+    // fret up, and your 7 is a half step below it" is true and transferable.
+    //
+    // The tritone is the one case with no degree to reach at all, so it keeps
+    // the level landing and the crack becomes the lesson.
+    r.mid = {string:r.ns, fret:f};
+    r.landed = levelDeg;
+    r.gapShift = 0;
+    if(!r.sameString && !r.canonicalEdge && r.cycDeg && levelDeg !== r.cycDeg){
+      const o = offsetsTo(r.ns, f, r.cycDeg);
+      // More than a couple of frets isn't a seam, it's the neck running out.
+      if(o.length && Math.abs(o[0]) <= 2){
+        r.mid = {string:r.ns, fret:f + o[0]};
+        r.landed = r.cycDeg;
+        r.gapShift = o[0];
+      }
+    }
+    r.onCycle = !!r.cycDeg && r.landed === r.cycDeg;
+    r.slide = r.destFret - r.mid.fret;
+    return r;
+  }
+
+  function fretWord(n){
+    const a = Math.abs(n);
+    return a + (a === 1 ? ' fret' : ' frets');
+  }
+  // Plain-language interval, since "a half step" means more to a beginner than
+  // "one semitone" and both mean more than "minor second".
+  function stepWord(n){
+    const a = Math.abs(n);
+    if(a === 1) return 'a half step';
+    if(a === 2) return 'a whole step';
+    return fretWord(a);
   }
 
   function setPlaque(numEl, romanEl, deg){
@@ -951,6 +1121,336 @@
     const curDeg = degreeAt(state.current.string, state.current.fret);
     setPlaque(curNumEl, curRomanEl, curDeg);
     setPlaque(tgtNumEl, tgtRomanEl, state.targetDegree);
+    hintAskDegEl.textContent = DEGREE_LABEL[state.targetDegree] || '';
+  }
+
+  // The cycle with the two degrees in play lit up: the abstract sequence from
+  // the guide, made concrete for this one move. Returned as markup so it can
+  // live inside the step it explains rather than as a separately numbered row.
+  // Empty when the route never crosses a string, and when a lowered degree is
+  // involved — those aren't in the cycle and pretending otherwise teaches
+  // something false.
+  function cycleStripHtml(r){
+    if(r.sameString) return '';
+    // Always the sequence's own path — where it says you should end up. When an
+    // edge case means you don't land there, the strip still shows the promise
+    // and the seam ends light up to say why it wasn't kept.
+    const iFrom = CYCLE.indexOf(r.curDeg);
+    const iTo   = CYCLE.indexOf(r.cycDeg);
+    if(iFrom < 0 || iTo < 0) return '';
+
+    // The places walked through on the way, so a two- or three-string reach
+    // reads as steps along the sequence rather than a leap between two lights.
+    const via = new Set();
+    for(let n = 1; n < r.span; n++){
+      via.add(((iFrom + r.dir * n) % CYCLE.length + CYCLE.length) % CYCLE.length);
+    }
+    const cells = CYCLE.map((d, i)=>{
+      const cls = [];
+      if(i === iFrom) cls.push('from');
+      else if(i === iTo) cls.push('to');
+      else if(via.has(i)) cls.push('via');
+      // The strip is written out cut at exactly the odd join, so its two ends
+      // — the 4 and the 7 — are the two sides of one seam. Marked always, lit
+      // when the route is the one that crosses it.
+      if(i === 0 || i === CYCLE.length - 1) cls.push('seam');
+      return `<span class="${cls.join(' ')}">${d}</span>`;
+    }).join('');
+    return `<div class="hint-cycle${r.tritone ? ' seam-lit' : ''}">${cells}</div>`;
+  }
+
+  // The intervals between consecutive degrees of the major scale, 1→2 up to
+  // 7→1. Two of the seven are half steps, and knowing which two is the whole
+  // trick to sliding the right distance along a string.
+  const SCALE_GAPS = ['W','W','H','W','W','W','H'];
+  const NATURALS = ['1','2','3','4','5','6','7'];
+
+  // The two edge cases get a picture of their own instead of the sequence strip
+  // — the sequence is precisely the thing that doesn't apply here, so showing it
+  // only muddies the point. A fork says it in one glance: this degree, one
+  // string over, splits into these two, and here's which one you want.
+  //
+  // Mirrored for the other case, because the direction is half the fact: from a
+  // 4 you're heading to a lighter string (fork opens right), from a 7 to a
+  // heavier one (fork opens left).
+  function branchFigureHtml(r){
+    if(!r.canonicalEdge) return '';
+    const solo = r.dir === 1 ? '4' : '7';
+    const [lo, hi] = r.between;        // a fret down, and a fret up
+    const W = 150, flip = r.dir === -1;
+    const X  = (x) => flip ? W - x : x;
+    const RX = (x, w) => flip ? W - x - w : x;
+
+    const box = (x, y, deg)=>{
+      const kind = deg === solo ? 'solo' : deg === r.target ? 'target' : 'other';
+      const fill   = kind === 'solo' ? 'var(--live)' : kind === 'target' ? 'var(--seek)' : 'var(--bg)';
+      const stroke = kind === 'other' ? 'var(--line-strong)' : 'none';
+      const ink    = kind === 'solo' ? '#04212a' : kind === 'target' ? '#2a1a00' : 'var(--muted)';
+      return `<rect x="${RX(x,30)}" y="${y}" width="30" height="20" rx="6" fill="${fill}" stroke="${stroke}"/>`
+           + `<text x="${RX(x,30)+15}" y="${y+14}" text-anchor="middle" font-size="12.5"`
+           + ` font-weight="600" fill="${ink}">${DEGREE_LABEL[deg]}</text>`;
+    };
+    const arrow = (y)=> `<polygon points="${X(84)},${y-3.5} ${X(91)},${y} ${X(84)},${y+3.5}"`
+                      + ` fill="var(--seek)"/>`;
+    const limb = (y)=> `<path d="M${X(62)},22 C${X(74)},22 ${X(74)},${y} ${X(84)},${y}"`
+                     + ` fill="none" stroke="var(--seek)" stroke-width="1.6"/>`;
+    const tag = (y, txt, on)=>
+      `<text x="${X(128)}" y="${y}" text-anchor="${flip ? 'end' : 'start'}" font-size="9.5"`
+      + ` font-weight="600" fill="${on ? 'var(--seek)' : 'var(--dim)'}">${txt}</text>`;
+
+    return `<svg class="hint-branch" viewBox="0 0 ${W} 44" preserveAspectRatio="xMidYMid meet"`
+      + ` role="img" aria-label="From the ${solo}, one string over lands between the ${lo} and the ${hi}">`
+      + box(2, 12, solo)
+      + `<path d="M${X(32)},22 H${X(62)}" stroke="var(--seek)" stroke-width="1.6"/>`
+      // where you actually land: nothing, in the crack between the two
+      + `<circle cx="${X(62)}" cy="22" r="6" fill="none" stroke="var(--miss)"`
+      + ` stroke-width="1.4" stroke-dasharray="3 2.5"/>`
+      + limb(10) + limb(34) + arrow(10) + arrow(34)
+      // Lower fret on top, higher fret below — matching the neck, where fret
+      // numbers grow downward away from the nut. Ordering these by pitch
+      // instead would have the figure disagree with the board it's describing.
+      + box(94, 0, lo) + box(94, 24, hi)
+      + tag(14, '−1', lo === r.target) + tag(38, '+1', hi === r.target)
+      + `</svg>`;
+  }
+
+  // The formula with the stretch being walked lit up: the same treatment the
+  // cycle strip gives the string-crossing move, for the fret-sliding one.
+  function formulaStripHtml(r){
+    if(r.slide === 0) return '';
+    const a = NATURALS.indexOf(r.landed);
+    const b = NATURALS.indexOf(r.target);
+    if(a < 0 || b < 0) return '';
+
+    const up = r.slide > 0;
+    const steps = up ? (b - a + 7) % 7 : (a - b + 7) % 7;
+    const litGap = new Set(), viaDeg = new Set();
+    for(let n = 0; n < steps; n++){
+      litGap.add(up ? (a + n) % 7 : (a - n - 1 + 7) % 7);
+      if(n > 0) viaDeg.add(up ? (a + n) % 7 : (a - n + 7) % 7);
+    }
+
+    let cells = '';
+    for(let i = 0; i < 7; i++){
+      const dc = i === a ? ' from' : i === b ? ' to' : viaDeg.has(i) ? ' via' : '';
+      cells += `<span class="deg${dc}">${NATURALS[i]}</span>`;
+      cells += `<span class="gap${litGap.has(i) ? ' lit' : ''}">${SCALE_GAPS[i]}</span>`;
+    }
+    return `<div class="hint-formula">${cells}</div>`;
+  }
+
+  function renderHintText(r){
+    const dirWord = r.dir === 1 ? 'thinner' : 'thicker';
+    const steps = [];
+
+    // Every step here is one drawn leg, in the same order, so the badge on the
+    // neck and the number in this list are always the same instruction.
+    const L = d => DEGREE_LABEL[d];
+    const way = r.slide > 0 ? 'up' : 'down';
+    // An edge case gets the fork instead of the sequence — one picture per step,
+    // and the sequence isn't what's happening here.
+    const branch = branchFigureHtml(r);
+    const cycleStrip = cycleStripHtml(r);
+    const formulaStrip = formulaStripHtml(r);
+
+    if(r.sameString){
+      steps.push(`Stay on this string: <b>${L(r.curDeg)}</b> to <b>${L(r.target)}</b> is ` +
+                 `${stepWord(r.slide)} — go ${way} ${fretWord(r.slide)}.` + formulaStrip);
+    } else {
+      const reach = `<b>${r.span === 1 ? 'One string' : r.span + ' strings'} ${dirWord}</b>`;
+      const hop = r.span === 1 ? '' : ` — ${r.span} steps along <b>7 3 6 2 5 1 4</b>`;
+
+      // Where the sequence's degree actually sits: level with you, or displaced
+      // a fret by the gap. Naming the displacement each time is how it sticks.
+      let found;
+      if(r.gapShift !== 0){
+        found = `the <b>${L(r.landed)}</b>, sitting ${fretWord(r.gapShift)} `
+              + `${r.gapShift > 0 ? 'up' : 'down'} rather than level`;
+      } else if(r.landed && r.onCycle){
+        found = `the <b>${L(r.landed)}</b>`;
+      } else if(r.landed){
+        found = `the <b>${L(r.landed)}</b>, not the <b>${L(r.cycDeg)}</b> the sequence promises`;
+      } else if(r.between){
+        found = `the gap between the <b>${L(r.between[0])}</b> and the <b>${L(r.between[1])}</b>`;
+      } else {
+        found = `nothing in the key`;
+      }
+      // With the fork alongside, spelling the pair out again in words just
+      // costs a line to say the same thing twice — let the picture finish the
+      // sentence.
+      // The fork comes FIRST in source order: a right-floated element only
+      // clears the line it's declared on, so putting it after the text pushed
+      // it down a row and wasted the height the float was meant to save.
+      // "Same fret" is the rule, so only claim it when it held.
+      const level = r.gapShift === 0 ? ', same fret' : '';
+      steps.push(branch
+        ? branch + `${reach}, same fret${hop} — you land in the gap:`
+        : `${reach}${level}${hop} — ${found}.` + cycleStrip);
+
+      if(r.slide !== 0){
+        // "The lower one" reads straight off the sentence above when you landed
+        // in a crack; naming a scale interval only makes sense from a degree.
+        const lead = r.landed
+          ? `<b>${L(r.landed)}</b> to <b>${L(r.target)}</b> is ${stepWord(r.slide)} — go ${way} ${fretWord(r.slide)}.`
+          : `Your <b>${L(r.target)}</b> is the ${r.slide > 0 ? 'higher' : 'lower'} one — ${fretWord(r.slide)} ${way}.`;
+        steps.push(lead + formulaStrip);
+      }
+    }
+
+    hintStepsEl.innerHTML = steps.map(s => `<li>${s}</li>`).join('');
+
+    // The two places the neat rule doesn't hold. Saying so is the most useful
+    // thing the hint does — these are exactly the spots that break people.
+    // Two joins in the whole system aren't fourths: one in the tuning (G→B)
+    // and one in the sequence (4 round to 7). Mid-game is the wrong moment to
+    // derive why — what sticks is the concrete landing, so this names the two
+    // degrees you fall between and leaves the reasoning to the degree-map page.
+    // Only speak up when the sequence didn't deliver. Then say the memorable
+    // fact rather than the reason — there are exactly two of these to carry,
+    // and they're learned the way the open strings are, not derived.
+    let warn = '';
+    if(!r.sameString){
+      if(r.canonicalEdge){
+        warn = r.dir === 1
+          ? `From a <b>4</b>, one string lighter always lands between the <b>6</b> and the <b>7</b>. One of the two edge cases to memorise alongside the sequence.`
+          : `From a <b>7</b>, one string heavier always lands between the <b>4</b> and the <b>5</b>. One of the two edge cases to memorise alongside the sequence.`;
+      } else if(r.gapShift !== 0 && r.gbGap && r.tritone){
+        warn = `Both odd joins on this reach — the G→B pair and the 4-to-7 join — so the sequence's degree is displaced twice over.`;
+      } else if(r.gapShift !== 0 && r.gbGap){
+        warn = `Mind the gap: G→B is the one string pair tuned a third, not a fourth, so the sequence's next degree sits a fret across from level.`;
+      } else if(r.gapShift !== 0){
+        warn = `The 4-to-7 join is the odd one in the sequence, so its degree sits a fret across from level rather than beside you.`;
+      } else if(!r.onCycle){
+        warn = `This reach passes the 4-to-7 join, where the sequence gives out, so it lands a fret off what it promises.`;
+      }
+    }
+    hintWarnEl.innerHTML = warn;
+    hintWarnEl.hidden = !warn;
+
+    // Every degree repeats all over the neck, and the router picked whichever
+    // was nearest. Saying so keeps the hint honest and quietly makes the point
+    // that these numbers are everywhere.
+    // Minus one: the destination itself is in that count.
+    const others = boardEl.querySelectorAll(`.fret-cell[data-degree="${r.target}"]`).length - 1;
+    hintAltEl.innerHTML = others > 0
+      ? `One way of many — <b>${others}</b> other <b>${L(r.target)}</b>${others > 1 ? 's' : ''} on the neck would count too.`
+      : '';
+    hintAltEl.hidden = others <= 0;
+  }
+
+  // A quadratic arc between two points plus the point halfway along it, which
+  // is where the step badge sits. Curved rather than straight so two legs of a
+  // route read as one travelling path instead of a rigid L.
+  function arcBetween(p, q, k){
+    const dx = q.x - p.x, dy = q.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const bow = Math.min(len * 0.22, 26 * k);
+    const cx = (p.x + q.x) / 2 - (dy / len) * bow;
+    const cy = (p.y + q.y) / 2 + (dx / len) * bow;
+    return {
+      d: `M ${p.x} ${p.y} Q ${cx} ${cy} ${q.x} ${q.y}`,
+      mid: {x:(p.x + 2*cx + q.x) / 4, y:(p.y + 2*cy + q.y) / 4},
+    };
+  }
+
+  function drawHintRoute(r){
+    clearHintRoute();
+    if(!r || !hintUnderEl || !layout) return;
+    const k = layout.noteScale;
+    const at = (s, f) => toXY(layout.xCenter[f], layout.crossPositions[rowOf(s)]);
+    const a = at(r.from.string, r.from.fret);
+    const b = at(r.ns, r.mid.fret);       // level with you, always
+    const c = at(r.ns, r.destFret);
+    const under = document.createDocumentFragment();
+    // Three layers above the notes, appended in this order: the stop markers
+    // first, then the rings around them, then the step badges last so a badge
+    // is never buried by a marker it happens to sit near.
+    const stops  = document.createDocumentFragment();
+    const rings  = document.createDocumentFragment();
+    const badges = document.createDocumentFragment();
+
+    // Numbered to match the panel's steps exactly, so "step 2" in the text and
+    // the "2" on the neck are the same instruction.
+    let step = 0;
+    const addLeg = (p, q)=>{
+      const arc = arcBetween(p, q, k);
+      under.appendChild(el('path', {d:arc.d, fill:'none', stroke:'var(--seek)',
+        'stroke-width':2.2*k, 'stroke-dasharray':`${4.5*k} ${3.5*k}`,
+        'stroke-linecap':'round', class:'hint-leg'}));
+      const n = ++step;
+      badges.appendChild(el('circle', {cx:arc.mid.x, cy:arc.mid.y, r:8*k,
+        fill:'var(--seek)', stroke:'var(--bg)', 'stroke-width':1.5*k, class:'hint-badge'}));
+      const t = el('text', {x:arc.mid.x, y:arc.mid.y + 3.4*k, 'text-anchor':'middle',
+        'font-size':10*k, 'font-weight':600, fill:'#2a1a00', class:'note-label'});
+      t.textContent = n;
+      badges.appendChild(t);
+    };
+
+    // Dots mode draws the notes without numbers; hidden mode draws nothing at
+    // all, leaving the rings floating over blank neck with no way to tell what
+    // they are. So the route labels its own stops in those modes — the words
+    // name a 5 and a 4, and the board has to be able to say the same. Giving
+    // the numbers away is the point: the hint is opt-in help.
+    const nameStops = state.noteDisplay !== 'numerals';
+    const nameStop = (p, deg)=>{
+      if(!nameStops || !deg) return;
+      // Opaque, so it also clips the dashed legs the way a real note does.
+      stops.appendChild(el('circle', {cx:p.x, cy:p.y, r:12*k, fill:'var(--panel-3)',
+        stroke:'var(--seek)', 'stroke-width':1.4*k, class:'hint-name'}));
+      const lab = DEGREE_LABEL[deg];
+      const t = el('text', {x:p.x, y:p.y + 4*k, 'text-anchor':'middle',
+        'font-size':(lab.length > 1 ? 9.5 : 11.5)*k, 'font-weight':600,
+        fill:'var(--text)', class:'note-label'});
+      t.textContent = lab;
+      stops.appendChild(t);
+    };
+
+    if(!r.sameString) addLeg(a, b);
+    if(r.slide !== 0){
+      // The staging post only earns a marker when it's somewhere you stop.
+      if(!r.sameString){
+        rings.appendChild(el('circle', {cx:b.x, cy:b.y, r:17*k, fill:'none',
+          stroke:'var(--seek)', 'stroke-width':2*k, opacity:.55, class:'hint-stop'}));
+        nameStop(b, r.landed);
+      }
+      addLeg(b, c);
+    }
+    rings.appendChild(el('circle', {cx:c.x, cy:c.y, r:18*k, fill:'none',
+      stroke:'var(--seek)', 'stroke-width':2.5*k, class:'hint-dest'}));
+    nameStop(c, r.target);
+
+    hintUnderEl.appendChild(under);
+    hintOverEl.appendChild(stops);
+    hintOverEl.appendChild(rings);
+    hintOverEl.appendChild(badges);
+  }
+
+  function clearHintRoute(){
+    if(hintUnderEl) hintUnderEl.innerHTML = '';
+    if(hintOverEl) hintOverEl.innerHTML = '';
+  }
+
+  function openHint(){
+    const r = computeHintRoute();
+    if(!r) return;
+    hint.open = true;
+    hint.route = r;
+    renderHintText(r);
+    drawHintRoute(r);
+    hintPanelEl.hidden = false;
+    hintAskBtnEl.hidden = true;
+    // Both ends of the route have to be on screen for the arrows to mean
+    // anything, so centre between them rather than on either one.
+    centerOn(r.ns, Math.round((r.from.fret + r.destFret) / 2));
+    trackEvent('HintOpen', {from: r.curDeg, to: r.target, strings: r.span, frets: r.slide});
+  }
+
+  function closeHint(){
+    hint.open = false;
+    hint.route = null;
+    clearHintRoute();
+    hintPanelEl.hidden = true;
+    hintAskBtnEl.hidden = false;
   }
 
   // ---------- settings ----------
@@ -1292,6 +1792,7 @@
     syncSettingsUI();
     saveSettings();
     renderNotes();
+    if(hint.open) drawHintRoute(hint.route);
     trackEvent('HarderNudgeAccept');
     closeNudge();
   });
@@ -1310,6 +1811,8 @@
     trackEvent(NOTE_DISPLAY_EVENT[state.noteDisplay]);
     saveSettings();
     renderNotes();
+    // Whether the route has to name its own stops depends on this setting.
+    if(hint.open) drawHintRoute(hint.route);
   });
 
   const toggleFlats = document.getElementById('toggleFlats');
@@ -1321,6 +1824,7 @@
     state.includeFlats = !state.includeFlats;
     toggleFlats.classList.toggle('on', state.includeFlats);
     saveSettings();
+    closeHint();   // the degree-per-cell mapping is about to change under it
 
     // Switching flats off can pull the ground out from under a run: the note
     // you're on, or the one you've been asked to find, may no longer be in the
@@ -1374,6 +1878,12 @@
     for(const b of guitarTypeSeg.children) b.classList.toggle('active', b.dataset.val === state.guitarType);
   }
 
+  hintAskBtnEl.addEventListener('click', openHint);
+  hintCloseBtnEl.addEventListener('click', ()=>{
+    trackEvent('HintClose');
+    closeHint();
+  });
+
   restartBtnEl.addEventListener('click', resetRun);
 
   // The one tile toggles: it's Start in practice, Stop mid-run. Stopping
@@ -1392,6 +1902,7 @@
     // on wide screens even during time attack, so this needs its own guard
     // rather than relying on the button being hidden.
     if(state.mode === 'timeAttack') return;
+    closeHint();   // its route points at the position we're about to leave
     state.current = rootStartPosition();
     state.prevDegree = null;
     state.prevDegree2 = null;
@@ -1431,6 +1942,9 @@
     const scroller = neckScrollEl;
     scroller.scrollLeft = 0;
     scroller.scrollTop = 0;
+    // buildStaticBoard minted a fresh hintGroup and every coordinate moved, so
+    // an open route has to be drawn again against the new layout.
+    if(hint.open) drawHintRoute(hint.route);
     // renderNotes above threw away the note groups the hints and the spotlight
     // were measured against, so both have to be re-derived from the new ones.
     if(tour.active){

@@ -81,7 +81,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"></noscript>
-<link rel="stylesheet" href="style.css?v=20260805h">
+<link rel="stylesheet" href="style.css?v=20260805q">
 </head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WL72320DHV"></script>
@@ -164,15 +164,21 @@
   <div class="stage">
     <aside class="side" id="sidePanel">
       <div class="plaques">
+        <!-- Roman numeral beside the number rather than under it: same
+             information, one line less, and the board gets the height. -->
         <div class="plaque current">
           <div class="eyebrow">Current</div>
-          <div class="num" id="curNum">1</div>
-          <div class="roman" id="curRoman">I</div>
+          <div class="plaque-val">
+            <span class="roman" id="curRoman">I</span>
+            <span class="num" id="curNum">1</span>
+          </div>
         </div>
         <div class="plaque target">
           <div class="eyebrow">Find</div>
-          <div class="num" id="tgtNum">5</div>
-          <div class="roman" id="tgtRoman">V</div>
+          <div class="plaque-val">
+            <span class="roman" id="tgtRoman">V</span>
+            <span class="num" id="tgtNum">5</span>
+          </div>
         </div>
         <button class="plaque plaque-action" id="taStartBtn" aria-label="Start Time Attack">
           <svg class="ta-icon icon-start" viewBox="0 0 24 24" aria-hidden="true">
@@ -186,6 +192,27 @@
           <span class="ta-label">Time<br>Attack</span>
         </button>
       </div>
+
+      <!-- Teaches the route rather than giving the answer. Sits inside .side so
+           it lands under the plaques in both layouts — the phone's top strip and
+           the desktop rail — without a second copy. -->
+      <div class="hint" id="hintBox">
+        <button class="hint-ask" id="hintAskBtn" type="button">
+          How do I find the <b id="hintAskDeg">5</b>?
+        </button>
+        <div class="hint-panel" id="hintPanel" hidden>
+          <!-- Each step carries its own picture: the cycle strip sits inside
+               the string-crossing step, the major-scale formula inside the
+               sliding one. One number per move, not one per element. -->
+          <ol class="hint-steps" id="hintSteps"></ol>
+          <p class="hint-warn" id="hintWarn" hidden></p>
+          <!-- The board holds a dozen of any degree; this is one way to one of
+               them, not the answer. Worth saying, or the hint reads as gospel. -->
+          <p class="hint-alt" id="hintAlt"></p>
+          <button class="hint-close" id="hintCloseBtn" type="button">Got it</button>
+        </div>
+      </div>
+
       <div class="side-slot" id="sideSlot"></div>
     </aside>
 
@@ -287,7 +314,7 @@
   <p>Fretboardwalk runs the neck vertically, so it needs portrait. Rotate back to carry on.</p>
 </div>
 
-<script src="script.js?v=20260805d"></script>
+<script src="script.js?v=20260805s"></script>
 
 </body>
 </html>

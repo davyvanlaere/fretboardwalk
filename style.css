@@ -203,6 +203,131 @@
     .header-right{ gap:5px; }
   }
 
+  /* ---------------- "how do I find it" hint ---------------- */
+  /* Lives under the plaques in .side, so one copy serves the phone's top strip
+     and the desktop rail. Amber throughout, matching the Find plaque and the
+     board's "seek" colour — the route and the thing it leads to read as one. */
+  .hint{ flex:0 0 auto; padding:0 14px 10px; }
+  .hint[hidden]{ display:none; }
+  .hint-ask{
+    display:block; width:100%; cursor:pointer;
+    background:var(--panel-2); border:1px dashed var(--line-strong); border-radius:10px;
+    color:var(--muted); font-family:inherit; font-size:12.5px; padding:9px 12px;
+  }
+  .hint-ask b{ color:var(--seek); font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  .hint-ask:active{ background:var(--panel-3); }
+  .hint-ask[hidden]{ display:none; }
+
+  .hint-panel{
+    background:var(--panel-2); border:1px solid var(--seek); border-radius:10px;
+    padding:11px 13px 10px;
+  }
+  .hint-panel[hidden]{ display:none; }
+
+  /* Each diagram sits inside the step it explains, indented under that step's
+     number — so one move is one number, whether you read the words or the
+     picture. Seeing the sequence re-lit on every hint is what turns it from a
+     string of digits into something with a shape. */
+  .hint-cycle, .hint-formula{
+    display:flex; gap:2px; min-width:0; margin-top:7px;
+    font-family:'IBM Plex Mono', monospace; font-size:12px;
+  }
+  .hint-cycle span{
+    flex:1; text-align:center; padding:3px 0; border-radius:5px;
+    color:var(--dim); background:var(--bg);
+  }
+  /* The major scale as alternating degrees and the gaps between them — the two
+     H's are the whole point, so they have to be visible even when unlit. */
+  .hint-formula .deg{
+    flex:1.15; text-align:center; padding:3px 0; border-radius:5px;
+    color:var(--dim); background:var(--bg); font-size:11px;
+  }
+  /* W and H have to be readable at a glance — they're the actual content of
+     the formula, not decoration. */
+  .hint-formula .gap{
+    flex:.85; text-align:center; padding:3px 0;
+    font-size:9.5px; font-weight:600; color:var(--text); opacity:.7;
+  }
+  .hint-formula .gap.lit{ color:var(--seek); opacity:1; }
+  .hint-formula .deg.from{ background:var(--live); color:#04212a; font-weight:600; }
+  .hint-formula .deg.to{ background:var(--seek); color:#2a1a00; font-weight:600; }
+  .hint-formula .deg.via{ background:var(--panel-3); color:var(--muted); }
+  .hint-cycle span.from{ background:var(--live); color:#04212a; font-weight:600; }
+  .hint-cycle span.to{ background:var(--seek); color:#2a1a00; font-weight:600; }
+  /* Passed through on a two- or three-string reach: dim enough to read as
+     "on the way" rather than "arrive here". */
+  .hint-cycle span.via{ background:var(--panel-3); color:var(--muted); }
+  /* The sequence is written cut at its odd join, so the 4 and the 7 at either
+     end are the two sides of one seam. Outlined rather than bordered so the
+     cells don't shift, and it turns red only on the route that crosses it. */
+  .hint-cycle span.seam{ outline:1px dashed var(--dim); outline-offset:-1px; }
+  .hint-cycle.seam-lit span.seam{ outline:1.5px dashed var(--miss); }
+
+  .hint-steps{
+    margin:0; padding:0; list-style:none; counter-reset:hstepn;
+    display:flex; flex-direction:column; gap:7px;
+  }
+  .hint-steps li{
+    position:relative; padding-left:22px; font-size:12.5px; line-height:1.45;
+    color:var(--muted);
+  }
+  .hint-steps li::before{
+    counter-increment:hstepn; content:counter(hstepn);
+    position:absolute; left:0; top:1px; width:15px; height:15px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-size:9.5px; font-weight:600;
+    color:#2a1a00; background:var(--seek); border-radius:4px;
+  }
+  /* Floated so the step's text wraps beside it rather than under it — the fork
+     is half a sentence, not a separate exhibit, and stacking the two cost a
+     whole extra block of height. Fixed size so it can't balloon on a wide rail. */
+  .hint-branch{
+    float:right; width:152px; height:45px;
+    margin:0 0 2px 10px;
+  }
+  .hint-steps li{ display:flow-root; }   /* contain the float */
+  .hint-steps b{ color:var(--text); font-weight:600; }
+  .hint-steps em{ font-style:normal; color:var(--text); }
+
+  /* The two exceptions. Called out in the miss colour because they are exactly
+     where a confident guess goes wrong. */
+  .hint-warn{
+    margin:10px 0 0; padding-top:8px; border-top:1px solid var(--line);
+    font-size:11.5px; line-height:1.45; color:var(--miss);
+  }
+  .hint-warn[hidden]{ display:none; }
+  .hint-alt{
+    margin:8px 0 0; font-size:11px; line-height:1.45; color:var(--dim);
+  }
+  .hint-alt b{ color:var(--muted); font-weight:600; }
+  .hint-alt[hidden]{ display:none; }
+  .hint-close{
+    display:block; width:100%; margin-top:10px; cursor:pointer;
+    background:none; border:1px solid var(--line-strong); border-radius:8px;
+    color:var(--muted); font-family:inherit; font-size:12px; padding:7px 10px;
+  }
+  .hint-close:active{ background:var(--panel-3); }
+
+  /* Route drawn on the neck itself. Purely decorative, so it must never take a
+     tap: these groups sit above the hit cells in the SVG, and an opaque disc or
+     label over the destination would otherwise swallow the very click the hint
+     is telling you to make. */
+  #hintUnder, #hintOver{ pointer-events:none; }
+  @keyframes hintDash{ to{ stroke-dashoffset:-16; } }
+  .hint-leg{ animation:hintDash .7s linear infinite; }
+  @keyframes hintDestPulse{
+    0%,100%{ opacity:.5; transform:scale(1); }
+    50%{ opacity:1; transform:scale(1.12); }
+  }
+  .hint-dest{
+    animation:hintDestPulse 1.3s ease-in-out infinite;
+    transform-box:fill-box; transform-origin:center;
+  }
+  @media (prefers-reduced-motion:reduce){
+    .hint-leg{ animation:none; }
+    .hint-dest{ animation:none; opacity:.95; }
+  }
+
   /* ---------------- time attack bar ---------------- */
   /* Sits outside .stage/.board-area on purpose — a fixed-position strip here
      never touches the flex layout or the neckScroll measurements the
@@ -291,11 +416,14 @@
     font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.16em;
     text-transform:uppercase; color:var(--dim); margin-bottom:3px;
   }
+  /* Numeral and roman share one baseline-aligned row, so the tile is a line
+     shorter than it used to be and that height goes to the neck. */
+  .plaque-val{ display:flex; align-items:baseline; gap:7px; }
   .plaque .num{ font-size:30px; font-weight:600; line-height:1.05; letter-spacing:-.02em; }
   .plaque .num.wide{ font-size:25px; }
   .plaque .roman{
     font-family:'IBM Plex Mono', monospace; font-size:10.5px;
-    color:var(--dim); margin-top:2px;
+    color:var(--dim); flex:0 0 auto;
   }
   .plaque.current .num{ color:var(--live); }
   .plaque.target .num{ color:var(--seek); }
@@ -715,7 +843,8 @@
     .plaque .eyebrow{ font-size:10px; margin-bottom:6px; }
     .plaque .num{ font-size:70px; }
     .plaque .num.wide{ font-size:54px; }
-    .plaque .roman{ font-size:13px; margin-top:4px; }
+    .plaque .roman{ font-size:14px; }
+    .plaque-val{ gap:10px; }
 
     /* Rail stacks the plaques vertically, so the action tile goes full-width
        below Find and reads with a bit more presence than the phone tile. */

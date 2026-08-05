@@ -33,7 +33,8 @@ test.describe('"make it harder" nudge', () => {
     await expect(page.locator(nudge)).toHaveClass(/open/);
 
     // A toast, not a dialog: the run underneath keeps working while it's up.
-    await H.playCorrect(page, 1, { safeBottom: 320 });
+    // Only its two buttons take taps, so anywhere else on the board is live.
+    await H.playCorrect(page, 1, { avoid: '#nudge' });
     expect(await H.streak(page)).toBe('11');
   });
 
