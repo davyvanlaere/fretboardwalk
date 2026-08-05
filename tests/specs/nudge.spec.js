@@ -7,6 +7,12 @@ const H = require('../helpers');
 
 const nudge = '#nudge';
 
+// Every test here drives the streak to the threshold through real play — ten
+// turns of a 380ms move plus a smooth scroll each. They pass comfortably alone
+// but sit close to the limit when the whole suite is competing for frames, so
+// give the file its own headroom rather than raising the budget for everything.
+test.beforeEach(({}, testInfo) => testInfo.setTimeout(testInfo.timeout * 2));
+
 // Reaching a streak of 10 through the real game loop is the only honest way in;
 // the trigger lives inside setStreak.
 async function playTo(page, n) {
