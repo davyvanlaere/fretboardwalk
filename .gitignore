@@ -1,0 +1,5 @@
+# Test tooling only — the site itself stays dependency-free, and everything
+# else at repo root is deployed as-is.
+node_modules/
+tests/test-results/
+tests/playwright-report/

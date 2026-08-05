@@ -1,0 +1,15 @@
+{
+  "name": "fretboardwalk-tests",
+  "private": true,
+  "description": "Browser tests for Fretboardwalk. Deliberately kept out of the repo root so the site stays a zero-dependency static bundle.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "setup": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0"
+  }
+}

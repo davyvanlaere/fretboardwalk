@@ -81,7 +81,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"></noscript>
-<link rel="stylesheet" href="style.css?v=20260803c">
+<link rel="stylesheet" href="style.css?v=20260805d">
 </head>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WL72320DHV"></script>
@@ -212,30 +212,53 @@
         <li>A correct tap plays the real note and moves you on. Build a streak.</li>
       </ol>
       <p class="howto-hint">Change the key, hide the note labels to make it harder, or try Time Attack.</p>
+      <button class="howto-tour" id="howtoTourBtn" type="button">Take the quick tour</button>
       <a class="howto-guide" href="/help">Read the full guide &amp; why the major scale matters →</a>
     </div>
   </div>
 
-  <div class="onboard" id="onboard" role="dialog" aria-modal="true" aria-label="Choose your starting difficulty">
-    <div class="onboard-card">
-      <h2>Welcome to Fretboardwalk</h2>
-      <p class="onboard-sub">How well can you already find the notes of the major scale on the neck? Pick a starting point — you can change it anytime in settings.</p>
-      <div class="onboard-opts">
-        <button class="onboard-opt" data-val="numerals" type="button">
-          <span class="onboard-opt-t">New to this</span>
-          <span class="onboard-opt-d">Show the degree numbers right on the neck</span>
-        </button>
-        <button class="onboard-opt" data-val="dots" type="button">
-          <span class="onboard-opt-t">Getting there</span>
-          <span class="onboard-opt-d">Show the positions, but hide the numbers</span>
-        </button>
-        <button class="onboard-opt" data-val="hidden" type="button">
-          <span class="onboard-opt-t">Confident</span>
-          <span class="onboard-opt-d">Hide everything — test my recall</span>
-        </button>
+  <!-- The one question worth asking before anyone has seen the app: do you want
+       showing around or not. Deliberately answerable with no musical knowledge
+       whatsoever, unlike a difficulty choice. -->
+  <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+    <div class="gate-card">
+      <h2 id="gateTitle">Welcome to Fretboardwalk</h2>
+      <p class="gate-sub">It names a note of the scale, you find it on the guitar neck, and it plays the real thing. That's the whole app.</p>
+      <button class="gate-yes" id="gateYes" type="button">
+        Show me how it works
+        <span class="gate-yes-sub">Under a minute, on the real neck</span>
+      </button>
+      <button class="gate-no" id="gateNo" type="button">I'll dive straight in</button>
+      <p class="gate-foot">You can start the tour later from the <b>?</b> button.</p>
+    </div>
+  </div>
+
+  <!-- Guided tour. Points at the real board rather than describing it, and
+       step 4 is a note the newcomer actually taps — so "scale degree" lands as
+       something they did, not a word they had to already know. -->
+  <div class="tour" id="tour" role="dialog" aria-modal="true" aria-label="Guided tour">
+    <div class="tour-hole" id="tourHole"></div>
+    <div class="tour-card" id="tourCard">
+      <div class="tour-step" id="tourStep"></div>
+      <h2 class="tour-title" id="tourTitle"></h2>
+      <!-- A div, not a p: the closing step runs to two paragraphs. -->
+      <div class="tour-body" id="tourBody" aria-live="polite"></div>
+      <div class="tour-actions">
+        <button class="tour-skip" id="tourSkip" type="button">Skip</button>
+        <button class="tour-next" id="tourNext" type="button">Next</button>
       </div>
-      <p class="onboard-help">New to this? The <a href="/help">quick guide</a> explains how it works and why the major scale matters — reach it anytime from the <b>?</b> button.</p>
-      <button class="onboard-skip" id="onboardSkip" type="button">Just let me play</button>
+    </div>
+  </div>
+
+  <!-- The difficulty question the welcome dialog used to ask up front, moved to
+       the first moment a player can actually answer it: a 10-streak proves they
+       know what the numbers are. Non-blocking, and shown once ever. -->
+  <div class="nudge" id="nudge" role="status">
+    <p class="nudge-t">Nice run — ready to make it harder?</p>
+    <p class="nudge-d">Hide the numbers and you have to recall the shape instead of reading it. That's where the neck actually sticks.</p>
+    <div class="nudge-btns">
+      <button class="nudge-no" id="nudgeNo" type="button">Not yet</button>
+      <button class="nudge-yes" id="nudgeYes" type="button">Hide the numbers</button>
     </div>
   </div>
 
@@ -247,7 +270,7 @@
   <p>Fretboardwalk runs the neck vertically, so it needs portrait. Rotate back to carry on.</p>
 </div>
 
-<script src="script.js?v=20260803d"></script>
+<script src="script.js?v=20260805c"></script>
 
 </body>
 </html>

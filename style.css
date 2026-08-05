@@ -420,6 +420,15 @@
     color:#04212a; background:var(--live); border-radius:6px;
   }
   .howto-hint{ font-size:12.5px; color:var(--dim); margin:0 0 16px; line-height:1.5; }
+  /* The way back to a tour that was skipped or half-remembered — without it,
+     declining once at the gate would mean never being able to see it. */
+  .howto-tour{
+    display:block; width:100%; margin:0 0 9px;
+    background:var(--panel-2); border:1px solid var(--line-strong); border-radius:9px;
+    cursor:pointer; color:var(--text); font-family:inherit;
+    font-size:13px; font-weight:600; padding:11px 12px;
+  }
+  .howto-tour:active{ background:var(--panel-3); }
   .howto-guide{
     display:block; text-align:center; text-decoration:none;
     font-size:13px; font-weight:600; color:#04212a; background:var(--live);
@@ -427,45 +436,171 @@
   }
   .howto-guide:active{ background:var(--live-deep); }
 
-  /* ---------------- first-visit onboarding ---------------- */
-  /* Shown once (gated by a localStorage flag) so a newcomer picks a starting
-     difficulty instead of landing cold. Sits above every other overlay. */
-  .onboard{
-    display:none; position:absolute; inset:0; z-index:30;
-    align-items:center; justify-content:center; padding:20px;
-    background:rgba(6,8,11,.92);
+  /* ---------------- first-visit gate ---------------- */
+  /* The tour is opt-in, so this is the only thing standing between a first
+     visitor and the app. Kept to one question with two answers, and the
+     backdrop is light enough that the neck is already visible behind it. */
+  .gate{
+    display:none; position:absolute; inset:0; z-index:35;
+    align-items:center; justify-content:center; padding:22px;
+    background:rgba(6,8,11,.82);
   }
-  .onboard.open{ display:flex; }
-  .onboard-card{
-    width:100%; max-width:360px;
-    background:var(--panel); border:1px solid var(--line); border-radius:16px;
-    padding:24px 22px 18px;
+  .gate.open{ display:flex; }
+  .gate-card{
+    width:100%; max-width:340px; text-align:center;
+    background:var(--panel); border:1px solid var(--line-strong); border-radius:16px;
+    padding:24px 20px 18px;
+    box-shadow:0 24px 60px rgba(0,0,0,.6);
   }
-  .onboard-card h2{ font-size:19px; margin:0 0 8px; }
-  .onboard-sub{ font-size:13px; line-height:1.55; color:var(--muted); margin:0 0 18px; }
-  .onboard-opts{ display:flex; flex-direction:column; gap:10px; }
-  .onboard-opt{
-    display:flex; flex-direction:column; gap:3px; text-align:left;
-    background:var(--panel-2); border:1px solid var(--line-strong);
-    border-radius:11px; padding:12px 14px; cursor:pointer; color:var(--text);
-    font-family:inherit;
+  .gate-card h2{ font-size:18px; margin:0 0 9px; }
+  .gate-sub{ font-size:13px; line-height:1.55; color:var(--muted); margin:0 0 20px; }
+  .gate-yes{
+    display:flex; flex-direction:column; gap:3px; width:100%;
+    background:var(--live); border:none; border-radius:11px; cursor:pointer;
+    color:#04212a; font-family:inherit; font-size:14px; font-weight:600;
+    padding:13px 14px;
   }
-  .onboard-opt:hover{ border-color:var(--live); }
-  .onboard-opt:active{ background:var(--panel-3); }
-  .onboard-opt-t{ font-size:14px; font-weight:600; color:var(--text); }
-  .onboard-opt-d{ font-size:12px; color:var(--muted); }
-  .onboard-help{
-    font-size:12px; line-height:1.5; color:var(--dim); text-align:center;
-    margin:16px 0 0;
+  .gate-yes:active{ background:var(--live-deep); }
+  .gate-yes-sub{ font-size:11px; font-weight:500; opacity:.75; }
+  .gate-no{
+    display:block; width:100%; margin-top:9px;
+    background:var(--panel-2); border:1px solid var(--line-strong); border-radius:11px;
+    cursor:pointer; color:var(--text); font-family:inherit; font-size:13.5px;
+    padding:12px 14px;
   }
-  .onboard-help a{ color:var(--live); }
-  .onboard-help b{ color:var(--muted); font-family:'IBM Plex Mono', monospace; }
-  .onboard-skip{
-    display:block; margin:10px auto 0; padding:6px 10px;
-    background:none; border:none; cursor:pointer;
+  .gate-no:active{ background:var(--panel-3); }
+  .gate-foot{ font-size:11.5px; line-height:1.5; color:var(--dim); margin:15px 0 0; }
+  .gate-foot b{ color:var(--muted); font-family:'IBM Plex Mono', monospace; }
+
+  /* ---------------- guided tour ---------------- */
+  /* Deliberately NOT a modal over a hidden app: the point is that a newcomer
+     sees the real board the whole way through. The dimming is done by one
+     element's huge box-shadow spread, so the "hole" is a plain positioned div
+     that can be animated from target to target — no SVG mask, and .app's own
+     overflow:hidden clips the spread. */
+  .tour{
+    display:none; position:absolute; inset:0; z-index:30; overflow:hidden;
+  }
+  .tour.open{ display:block; }
+  .tour-hole{
+    position:absolute; left:0; top:0; width:0; height:0;
+    border-radius:14px; pointer-events:none;
+    box-shadow:0 0 0 9999px rgba(6,8,11,.86);
+    outline:1.5px solid var(--live); outline-offset:-1px;
+    transition:left .35s cubic-bezier(.4,0,.2,1), top .35s cubic-bezier(.4,0,.2,1),
+               width .35s cubic-bezier(.4,0,.2,1), height .35s cubic-bezier(.4,0,.2,1),
+               border-radius .35s;
+  }
+  /* Read-only steps swallow every tap so nothing can be poked out of sequence;
+     the "tap a 5" step lifts that so the board underneath is genuinely live
+     (the header/settings stay dead — see .tour-open below). */
+  .tour{ pointer-events:auto; }
+  .tour.await-tap{ pointer-events:none; }
+  .tour-card{ pointer-events:auto; }
+  /* .side covers the plaques and the Time Attack tile; .settings is listed
+     separately because the drawer is reparented out of .side on narrow screens. */
+  body.tour-open header,
+  body.tour-open .side,
+  body.tour-open .settings{ pointer-events:none; }
+
+  .tour-card{
+    position:absolute; left:12px; right:12px;
+    bottom:calc(12px + env(safe-area-inset-bottom));
+    max-width:400px; margin:0 auto;
+    background:var(--panel); border:1px solid var(--line-strong); border-radius:14px;
+    padding:15px 16px 13px;
+    box-shadow:0 16px 40px rgba(0,0,0,.55);
+  }
+  .tour-step{
+    font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--dim); margin-bottom:6px;
+  }
+  .tour-title{ font-size:16px; font-weight:600; margin:0 0 6px; }
+  .tour-body{ font-size:13px; line-height:1.55; color:var(--muted); margin:0 0 13px; }
+  .tour-body b{ color:var(--text); font-weight:600; }
+  /* Most steps are a single run of text straight in the container; the closing
+     one splits into paragraphs, so only those need spacing between them. */
+  .tour-body p{ margin:0 0 9px; }
+  .tour-body p:last-child{ margin-bottom:0; }
+  /* Opens in a new tab, so reading the guide never abandons a tour halfway
+     through (which would leave the onboarded flag unset and replay the whole
+     thing on the way back). */
+  .tour-body a{ color:var(--live); }
+  /* Skip pinned left by margin rather than space-between, so the final step
+     dropping it leaves the primary button where it already was. */
+  .tour-actions{ display:flex; align-items:center; justify-content:flex-end; gap:10px; }
+  .tour-skip{
+    margin-right:auto;
+    background:none; border:none; cursor:pointer; padding:6px 2px;
     color:var(--dim); font-family:inherit; font-size:12px; text-decoration:underline;
   }
-  .onboard-skip:active{ color:var(--muted); }
+  .tour-skip:active{ color:var(--muted); }
+  .tour-skip[hidden]{ display:none; }
+  .tour-next{
+    background:var(--live); border:none; border-radius:9px; cursor:pointer;
+    color:#04212a; font-family:inherit; font-size:13px; font-weight:600;
+    padding:10px 20px;
+  }
+  .tour-next:active{ background:var(--live-deep); }
+  .tour-next[hidden]{ display:none; }
+
+  /* Wrong tap during the hands-on step: the card jogs rather than flashing red,
+     since a beginner missing here is expected, not an error. */
+  @keyframes tourNudge{
+    0%,100%{ transform:translateX(0); }
+    25%{ transform:translateX(-6px); }
+    60%{ transform:translateX(5px); }
+  }
+  .tour-card.jog{ animation:tourNudge .34s ease-out; }
+
+  /* Every valid answer glows during the hands-on step — the fastest way to say
+     "several spots count" without a sentence about it. */
+  @keyframes tourHint{
+    0%,100%{ opacity:.35; transform:scale(1); }
+    50%{ opacity:1; transform:scale(1.14); }
+  }
+  .tour-hint{
+    animation:tourHint 1.25s ease-in-out infinite;
+    transform-box:fill-box; transform-origin:center;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .tour-hole{ transition:none; }
+    .tour-hint{ animation:none; opacity:.9; }
+    .tour-card.jog{ animation:none; }
+  }
+
+  /* ---------------- "make it harder" nudge ---------------- */
+  /* A toast, not a dialog: it must never stand between the player and a run
+     they're in the middle of. It arrives on a 10-streak, so it lands over the
+     neck at the exact moment someone is on a roll — hence pointer-events:none
+     on the card, with only the two buttons taking taps. A note that happens to
+     sit behind it stays playable instead of silently swallowing the tap. */
+  .nudge{
+    display:none; position:absolute; z-index:25; pointer-events:none;
+    left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom));
+    max-width:400px; margin:0 auto;
+    background:var(--panel-2); border:1px solid var(--seek); border-radius:14px;
+    padding:14px 16px 12px;
+    box-shadow:0 16px 40px rgba(0,0,0,.55);
+  }
+  .nudge.open{ display:block; animation:nudgeIn .3s ease-out; }
+  @keyframes nudgeIn{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+  .nudge-t{ font-size:14px; font-weight:600; color:var(--text); margin:0 0 5px; }
+  .nudge-d{ font-size:12.5px; line-height:1.5; color:var(--muted); margin:0 0 12px; }
+  .nudge-btns{ display:flex; align-items:center; justify-content:flex-end; gap:8px; pointer-events:auto; }
+  .nudge-no{
+    background:none; border:none; cursor:pointer; padding:9px 10px;
+    color:var(--dim); font-family:inherit; font-size:12.5px;
+  }
+  .nudge-no:active{ color:var(--muted); }
+  .nudge-yes{
+    background:var(--seek); border:none; border-radius:9px; cursor:pointer;
+    color:#2a1a00; font-family:inherit; font-size:13px; font-weight:600;
+    padding:10px 16px;
+  }
+  .nudge-yes:active{ background:var(--seek-deep); }
+  @media (prefers-reduced-motion:reduce){ .nudge.open{ animation:none; } }
 
   /* ---------------- rotate lock ---------------- */
   /* Web pages can't truly lock orientation outside fullscreen, so a phone turned

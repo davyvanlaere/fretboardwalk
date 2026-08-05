@@ -54,8 +54,22 @@
   const helpBtnEl       = document.getElementById('helpBtn');
   const howtoEl         = document.getElementById('howto');
   const howtoCloseEl    = document.getElementById('howtoClose');
-  const onboardEl       = document.getElementById('onboard');
-  const onboardSkipEl   = document.getElementById('onboardSkip');
+  const appEl           = document.querySelector('.app');
+  const gateEl          = document.getElementById('gate');
+  const gateYesEl       = document.getElementById('gateYes');
+  const gateNoEl        = document.getElementById('gateNo');
+  const howtoTourBtnEl  = document.getElementById('howtoTourBtn');
+  const tourEl          = document.getElementById('tour');
+  const tourHoleEl      = document.getElementById('tourHole');
+  const tourCardEl      = document.getElementById('tourCard');
+  const tourStepEl      = document.getElementById('tourStep');
+  const tourTitleEl     = document.getElementById('tourTitle');
+  const tourBodyEl      = document.getElementById('tourBody');
+  const tourNextEl      = document.getElementById('tourNext');
+  const tourSkipEl      = document.getElementById('tourSkip');
+  const nudgeEl         = document.getElementById('nudge');
+  const nudgeYesEl      = document.getElementById('nudgeYes');
+  const nudgeNoEl       = document.getElementById('nudgeNo');
   const settingsDrawerEl= document.getElementById('settingsDrawer');
   const restartBtnEl    = document.getElementById('restartBtn');
   const sideSlotEl      = document.getElementById('sideSlot');
@@ -661,6 +675,7 @@
   function setStreak(n){
     state.streak = n;
     renderScoreBox(n);
+    maybeNudgeHarder(n);
   }
 
   // ---------- combo juice ----------
@@ -744,10 +759,16 @@
     if(state.mode === 'timeAttack' && !timeAttack.running) return;
 
     const curDeg = degreeAt(state.current.string, state.current.fret);
-    if(deg !== null && deg === curDeg) return;   // already standing here
+    if(deg !== null && deg === curDeg){
+      // Silent no-op normally, but during the tour a tap that does nothing at
+      // all reads as the app being broken — so it still gets an answer.
+      if(tour.awaitingTap) tourHandleTap(deg, false);
+      return;   // already standing here
+    }
 
     const isCorrect = deg === state.targetDegree;
     playGuitarNote(s, f, !isCorrect);
+    if(tour.awaitingTap) tourHandleTap(deg, isCorrect);
 
     if(isCorrect){
       trackEvent('CorrectClick', {degree: deg});
@@ -955,35 +976,327 @@
   howtoCloseEl.addEventListener('click', closeHowto);
   // Click on the dimmed backdrop (but not the card) closes it.
   howtoEl.addEventListener('click', (e)=>{ if(e.target === howtoEl) closeHowto(); });
-  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeHowto(); });
+  document.addEventListener('keydown', (e)=>{
+    if(e.key !== 'Escape') return;
+    closeHowto();
+    if(tour.active) endTour();
+    // Dismissing the gate is the same answer as declining — the alternative is
+    // a keyboard user with no way out of it.
+    else if(gateEl.classList.contains('open')) declineTour();
+  });
 
-  // ---------- first-visit onboarding ----------
-  // Shows the difficulty picker whenever this single flag is absent, and sets
-  // it once a choice (or skip) is made — so it appears exactly once, then never
-  // again. Clearing this one key (or ?init=true) brings it back. Storage
-  // failures just skip it silently.
+  // ---------- first-visit tour ----------
+  // The welcome dialog this replaces asked newcomers to rate their own fluency
+  // with scale degrees before they'd seen a single one — unanswerable for the
+  // exact person it was meant to help. This walks the real board instead, one
+  // spotlit thing at a time, and ends by having them play a note. The
+  // difficulty question now lives in maybeNudgeHarder(), asked once they can
+  // answer it. Gated on the same flag as before, so anyone who already got the
+  // old dialog is left alone.
   const ONBOARDED_KEY = 'fretboardwalk.onboarded';
+  const TOUR_DEGREE = '5';   // consonant, easy to name, and always several frets away
+
   function markOnboarded(){ try{ localStorage.setItem(ONBOARDED_KEY, '1'); }catch(e){} }
-  function shouldOnboard(){
-    // ?init=true force-shows the picker regardless of the saved flag — handy
-    // for testing without clearing storage.
+  function shouldTour(){
+    // ?init=true force-shows the tour regardless of the saved flag — handy for
+    // testing without clearing storage.
     try{ if(new URLSearchParams(location.search).get('init') === 'true') return true; }catch(e){}
     try{ return !localStorage.getItem(ONBOARDED_KEY); }catch(e){ return false; }
   }
-  function finishOnboarding(mode){
-    if(mode){
-      state.noteDisplay = mode;
-      syncSettingsUI();
-      saveSettings();
+
+  // `restore` holds the display settings the tour overrode, so replaying it from
+  // the ? button doesn't quietly cost someone the Hidden mode they'd worked up
+  // to. Null whenever no tour is running.
+  let tour = {active:false, i:0, awaitingTap:false, restore:null};
+
+  // {key} is filled from the live key so the copy never claims C major to
+  // someone who arrived on a link with another key saved.
+  const TOUR_STEPS = [
+    {
+      title:'Every circle is a note that fits',
+      body:'Circles mark the notes of {key} — the seven that sound at home together, repeating all the way up the neck. The number is just which step of the scale it is: 1, 2, 3, up to 7.',
+      target:()=> fretboardWrapEl, pad:4,
+    },
+    {
+      // Every instance of the current degree lights up, not only the one you're
+      // on, so the copy has to own that rather than say "the glowing note" —
+      // and the repetition is the whole reason degrees beat note names anyway.
+      title:"You're standing on a 1",
+      body:'This one is your position. Notice the other 1s lit up too — one scale step turns up in a dozen places on a neck, which is exactly why these are worth learning as numbers.',
+      target:()=> currentNoteNode(), pad:16, radius:'50%',
+    },
+    {
+      title:'Find is the one to go to next',
+      body:"It's asking for the 5 — the fifth step of the scale. Same number, same distance, in every key: learn the shape once and it travels.",
+      target:()=> document.querySelector('.plaque.target'), pad:7,
+    },
+    {
+      title:'Your turn — tap a 5',
+      body:'Every 5 on the neck is ringed in gold, and they all count. Pick whichever one you can reach.',
+      target:()=> fretboardWrapEl, pad:4, awaitTap:true,
+    },
+    {
+      title:"That's the whole game",
+      body:'You just played the real 5 of {key}. Keep finding the number it asks for and the streak climbs — Time Attack puts a clock on it once you want one.',
+      target:()=> streakBoxEl, pad:7,
+    },
+    {
+      // The destination, stated plainly. Numerals are a crutch the app is
+      // supposed to take away, and a beginner who never learns that just plays
+      // a reading game forever. maybeNudgeHarder() offers the switch later; this
+      // is only where they find out it's the point.
+      title:'The goal: turn the numbers off',
+      body:'<p>Reading numbers off the neck is the training wheels. As it gets easy, drop this to <b>Dots only</b>, then <b>Hidden</b> — recalling a shape you can\'t see is the real skill. The <a href="/help" target="_blank" rel="noopener">guide</a> behind the <b>?</b> button has tips and tricks for memorising it faster.</p>'
+       // Six steps of pointing at numbered circles still never says what a
+       // scale degree *is*. Anyone who nodded along without that landing gets
+       // told plainly where to find it, rather than being left to guess.
+       + '<p>Not sure what a scale degree actually is? <a href="/scale-degrees" target="_blank" rel="noopener">Scale degrees explained</a> walks through the numbers 1–7 in plain English — no theory background needed.</p>',
+      target:()=> noteVisibilitySeg.closest('.setting-row'),
+      pad:8, next:'Start playing',
+      // On phones the control lives in a collapsed drawer, so there'd be
+      // nothing to point at. Opening it also shows them exactly where to go.
+      enter:()=> settingsDrawerEl.classList.add('open'),
+      settle:320,   // just past the drawer's .26s max-height transition
+    },
+  ];
+
+  function currentNoteNode(){
+    const row = noteIndex[state.current.string];
+    const g = row ? row[state.current.fret] : null;
+    // The group also carries the .pulse halo, which scales to 1.85 forever — so
+    // its bounding box breathes, and a spotlight measured from it would throb
+    // with it. The solid circle underneath is a fixed size.
+    return g ? g.querySelector('.note-visible') : null;
+  }
+
+  // The hole is positioned in .app's coordinate space, so every target — an SVG
+  // note group inside a scroller, a plaque in the rail, the header streak box —
+  // goes through the same two rects and nothing needs to know where it lives.
+  function positionTourHole(){
+    const step = TOUR_STEPS[tour.i];
+    if(!step) return;
+    let node = null;
+    try{ node = step.target(); }catch(e){}
+    if(!node){ tourHoleEl.style.opacity = '0'; return; }
+    const a = appEl.getBoundingClientRect();
+    const r = node.getBoundingClientRect();
+    const pad = step.pad || 8;
+    tourHoleEl.style.opacity = '1';
+    tourHoleEl.style.left   = (r.left - a.left - pad) + 'px';
+    tourHoleEl.style.top    = (r.top  - a.top  - pad) + 'px';
+    tourHoleEl.style.width  = (r.width  + pad*2) + 'px';
+    tourHoleEl.style.height = (r.height + pad*2) + 'px';
+    tourHoleEl.style.borderRadius = step.radius || '14px';
+  }
+
+  // Rings drawn on every valid answer for the hands-on step. Appended to the
+  // existing note group (so they inherit its position) and read their centre
+  // off the circle already there rather than recomputing layout maths.
+  function showTapHints(){
+    clearTapHints();
+    for(let s=0; s<6; s++){
+      for(let f=0; f<=FRET_COUNT; f++){
+        if(degreeAt(s,f) !== TOUR_DEGREE) continue;
+        const node = noteIndex[s] && noteIndex[s][f];
+        if(!node) continue;
+        const base = node.querySelector('.note-visible');
+        if(!base) continue;
+        node.appendChild(el('circle', {
+          cx: base.getAttribute('cx'), cy: base.getAttribute('cy'),
+          r: 16*layout.noteScale, fill:'none',
+          stroke:'var(--seek)', 'stroke-width':2.5, class:'tour-hint'
+        }));
+      }
+    }
+  }
+  function clearTapHints(){
+    for(const n of boardEl.querySelectorAll('.tour-hint')) n.remove();
+  }
+
+  function goToTourStep(i){
+    tour.i = i;
+    const step = TOUR_STEPS[i];
+    tour.awaitingTap = !!step.awaitTap;
+    tourEl.classList.toggle('await-tap', tour.awaitingTap);
+
+    if(step.enter) step.enter();
+
+    tourStepEl.textContent = `Step ${i+1} of ${TOUR_STEPS.length}`;
+    tourTitleEl.textContent = step.title;
+    // innerHTML because a couple of steps carry emphasis and a link. Every
+    // string here is authored above — nothing user-supplied reaches this.
+    tourBodyEl.innerHTML = step.body.replace('{key}', KEYS[state.keyIndex].name);
+    tourNextEl.hidden = tour.awaitingTap;
+    tourNextEl.textContent = step.next || 'Next';
+    tourSkipEl.hidden = (i === TOUR_STEPS.length - 1);   // nothing left to skip past
+
+    if(tour.awaitingTap) showTapHints(); else clearTapHints();
+    positionTourHole();
+    // A step that reveals its own target (opening the drawer) can't be measured
+    // until that settles; the hole's CSS transition makes the correction read
+    // as one movement rather than a jump.
+    if(step.settle) setTimeout(()=>{ if(tour.active && tour.i === i) positionTourHole(); }, step.settle);
+  }
+
+  // Called from handleClick while the hands-on step is waiting. A miss names
+  // the degree they actually hit — the single most useful thing to say, and it
+  // teaches the vocabulary in passing.
+  function tourHandleTap(deg, isCorrect){
+    if(isCorrect){
+      tour.awaitingTap = false;
+      tourEl.classList.remove('await-tap');
+      // Waits out the 380ms move so the next step doesn't talk over the board
+      // rearranging itself.
+      const next = tour.i + 1;
+      setTimeout(()=> goToTourStep(next), 460);
+      return;
+    }
+    tourBodyEl.textContent = deg === null
+      ? "That one isn't in the scale, which is why it has no circle. Tap any circle ringed in gold."
+      : `That's a ${DEGREE_LABEL[deg]}. You're after a 5 — any circle ringed in gold.`;
+    restartAnim(tourCardEl, 'jog');
+  }
+
+  function startTour(){
+    tour.active = true;
+    closeHowto();          // the tour can be launched from in there
+    gateEl.classList.remove('open');
+
+    // The tour describes seven numbered circles, so the board has to actually
+    // be showing them — a saved Hidden/flats setting would leave the copy
+    // pointing at a neck that doesn't match. Remembered rather than imposed:
+    // endTour puts it all back.
+    tour.restore = {
+      noteDisplay: state.noteDisplay,
+      showNames: state.showNames,
+      includeFlats: state.includeFlats,
+    };
+    state.noteDisplay = 'numerals';
+    state.showNames = false;
+    state.includeFlats = false;
+    syncSettingsUI();
+    saveSettings();
+
+    state.current = rootStartPosition();
+    state.prevDegree = null;
+    state.prevDegree2 = null;
+    state.targetDegree = TOUR_DEGREE;   // fixed, so step 3 and 4 can name it
+    setStreak(0);
+    renderCells();
+    renderNotes();
+    renderPlaques();
+
+    document.body.classList.add('tour-open');
+    tourEl.classList.add('open');
+    // Root position sits well down a 15-fret neck, so bring it into view before
+    // any hole is measured against it.
+    centerOn(state.current.string, state.current.fret);
+    requestAnimationFrame(()=> goToTourStep(0));
+    trackEvent('TourStart');
+  }
+
+  function endTour(){
+    const finished = tour.i >= TOUR_STEPS.length - 1;
+    tour.active = false;
+    tour.awaitingTap = false;
+    clearTapHints();
+    tourEl.classList.remove('open', 'await-tap');
+    document.body.classList.remove('tour-open');
+    // The last step opens the drawer to point inside it. On wide screens that's
+    // the rail's normal resting state; on phones it isn't, so hand the board
+    // back its space.
+    if(!mqWide.matches) settingsDrawerEl.classList.remove('open');
+    restoreAfterTour();
+    markOnboarded();
+    trackEvent(finished ? 'TourComplete' : 'TourSkip', {step: tour.i + 1});
+  }
+
+  // Puts back whatever the tour overrode. On a first visit these are already the
+  // defaults so nothing visibly happens; on a replay it's the difference between
+  // a helpful refresher and one that resets your difficulty.
+  function restoreAfterTour(){
+    const r = tour.restore;
+    tour.restore = null;
+    if(!r) return;
+
+    const flatsChanged = r.includeFlats !== state.includeFlats;
+    state.noteDisplay = r.noteDisplay;
+    state.showNames = r.showNames;
+    state.includeFlats = r.includeFlats;
+    syncSettingsUI();
+    saveSettings();
+
+    if(flatsChanged){
+      // Bringing the lowered degrees back changes the degree-per-cell mapping,
+      // and the tour left the run standing on a plain major degree with a plain
+      // major target. Restarting is the one state guaranteed to be coherent.
+      resetRun();
+    } else {
       renderNotes();
     }
-    markOnboarded();
-    onboardEl.classList.remove('open');
   }
-  onboardEl.querySelectorAll('.onboard-opt').forEach(btn => {
-    btn.addEventListener('click', ()=> finishOnboarding(btn.dataset.val));
+
+  tourNextEl.addEventListener('click', ()=>{
+    if(tour.i >= TOUR_STEPS.length - 1) endTour();
+    else goToTourStep(tour.i + 1);
   });
-  onboardSkipEl.addEventListener('click', ()=> finishOnboarding(null));  // keep the Numerals default
+  tourSkipEl.addEventListener('click', endTour);
+
+  // ---------- first-visit gate ----------
+  // Asking "want showing around?" needs no musical knowledge, so it's a fair
+  // question to put in front of someone who hasn't seen the app — unlike the
+  // difficulty picker this replaced. Either answer counts as onboarded, and the
+  // ? button keeps the tour reachable afterwards.
+  function declineTour(){
+    gateEl.classList.remove('open');
+    markOnboarded();
+    trackEvent('TourDeclined');
+  }
+  gateYesEl.addEventListener('click', startTour);
+  gateNoEl.addEventListener('click', declineTour);
+  howtoTourBtnEl.addEventListener('click', ()=>{
+    trackEvent('TourReplay');
+    startTour();
+  });
+  // The board scrolls under the spotlight (smooth-scrolling into position, or
+  // the player dragging the neck during the hands-on step), so the hole has to
+  // track it rather than being placed once.
+  neckScrollEl.addEventListener('scroll', ()=>{ if(tour.active) positionTourHole(); }, {passive:true});
+
+  // ---------- "make it harder" nudge ----------
+  // The difficulty question, asked at the first moment it's answerable. A
+  // 10-streak in numerals means they've read plenty of degrees off the neck —
+  // now "hide the numbers" describes something they've seen.
+  const NUDGE_KEY = 'fretboardwalk.harderNudge';
+  const NUDGE_AT_STREAK = 10;
+
+  function closeNudge(){
+    nudgeEl.classList.remove('open');
+    try{ localStorage.setItem(NUDGE_KEY, '1'); }catch(e){}
+  }
+  function maybeNudgeHarder(streak){
+    if(streak < NUDGE_AT_STREAK) return;
+    if(tour.active || state.mode !== 'practice') return;
+    if(state.noteDisplay !== 'numerals') return;   // nothing left to hide
+    if(nudgeEl.classList.contains('open')) return;
+    // A storage failure counts as "already seen" so it can't nag every session.
+    try{ if(localStorage.getItem(NUDGE_KEY)) return; }catch(e){ return; }
+    nudgeEl.classList.add('open');
+    trackEvent('HarderNudgeShown');
+  }
+  nudgeYesEl.addEventListener('click', ()=>{
+    // Dots, not hidden: the next rung up, not the top of the ladder.
+    state.noteDisplay = 'dots';
+    syncSettingsUI();
+    saveSettings();
+    renderNotes();
+    trackEvent('HarderNudgeAccept');
+    closeNudge();
+  });
+  nudgeNoEl.addEventListener('click', ()=>{
+    trackEvent('HarderNudgeDismiss');
+    closeNudge();
+  });
 
   const NOTE_DISPLAY_EVENT = {numerals:'SwitchNumerals', dots:'SwitchDots', hidden:'SwitchHidden'};
   const noteVisibilitySeg = document.getElementById('noteVisibilitySeg');
@@ -1116,6 +1429,13 @@
     const scroller = neckScrollEl;
     scroller.scrollLeft = 0;
     scroller.scrollTop = 0;
+    // renderNotes above threw away the note groups the hints and the spotlight
+    // were measured against, so both have to be re-derived from the new ones.
+    if(tour.active){
+      if(tour.awaitingTap) showTapHints();
+      centerOn(state.current.string, state.current.fret);
+      positionTourHole();
+    }
   }
 
   for(const q of [mq, mqWide]){
@@ -1148,6 +1468,6 @@
   renderNotes();
   renderPlaques();
 
-  if(shouldOnboard()) onboardEl.classList.add('open');
+  if(shouldTour()) gateEl.classList.add('open');
 
 })();
