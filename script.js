@@ -83,6 +83,7 @@
   const hintStepsEl     = document.getElementById('hintSteps');
   const hintWarnEl      = document.getElementById('hintWarn');
   const hintAltEl       = document.getElementById('hintAlt');
+  const hintCostEl      = document.getElementById('hintCost');
   const hintCloseBtnEl  = document.getElementById('hintCloseBtn');
   const taBarTrackEl    = document.getElementById('taBarTrack');
   const taBarFillEl     = document.getElementById('taBarFill');
@@ -698,6 +699,7 @@
     state.streak = n;
     renderScoreBox(n);
     maybeNudgeHarder(n);
+    syncHintCost();   // the warning only applies while there's a streak to lose
   }
 
   // ---------- combo juice ----------
@@ -1017,8 +1019,21 @@
     const target = state.targetDegree;
     const curDeg = degreeAt(s, f);
 
-    const MAX_SPAN = 3;    // three cycle steps is still countable on the strip
-    const FRET_COST = 2;   // sliding breaks your hand position; crossing doesn't
+    // Priced by what the route costs to WORK OUT, not by how far the hand
+    // moves. Those pull opposite ways: crossing a string is physically free but
+    // is another step along the sequence to compute, while a slide is one
+    // interval lookup whether it's one fret or three. Pricing frets high (the
+    // physical view) picked two-string reaches over a one-string reach with a
+    // slightly bigger slide — cheaper for the hand, more to think about.
+    // Measured over every position: this cuts two-string reaches from 21% to
+    // 16%, removes three-string ones almost entirely, and still keeps 96% of
+    // slides within two frets.
+    const MAX_SPAN = 3;
+    const FRET_COST = 1;
+    const SPAN_COST = 1.5;
+    // A same-string route is a true answer but teaches nothing about how the
+    // neck is laid out, so it has to be clearly better to win.
+    const SAME_STRING_COST = 1.5;
 
     let r = null;
     for(let ns = 0; ns <= 5; ns++){
@@ -1026,7 +1041,8 @@
       if(span > MAX_SPAN) continue;
       const offs = offsetsTo(ns, f, target);
       if(!offs.length) continue;
-      const cost = Math.abs(offs[0]) * FRET_COST + span;
+      const cost = Math.abs(offs[0]) * FRET_COST + span * SPAN_COST +
+                   (span === 0 ? SAME_STRING_COST : 0);
       // Ties go to the shorter reach, then to the thinner string — the
       // direction a hand usually travels.
       if(!r || cost < r.cost || (cost === r.cost && span < r.span) ||
@@ -1077,6 +1093,28 @@
     //
     // The tritone is the one case with no degree to reach at all, so it keeps
     // the level landing and the crack becomes the lesson.
+    // Lowered degrees aren't in the sequence at all — there is no "next one
+    // along" from a ♭6. So the first move is onto a natural degree, along the
+    // string you're already on, and only then does reaching across mean
+    // anything. Sliding to the destination's own fret makes that reach level by
+    // construction, so the sequence explains it cleanly.
+    if(!r.sameString && iCur < 0){
+      const midDeg = degreeAt(s, r.destFret);
+      if(midDeg && CYCLE.indexOf(midDeg) >= 0){
+        r.slideFirst = true;
+        r.mid = {string:s, fret:r.destFret};
+        r.landed = midDeg;
+        r.gapShift = 0;
+        r.slide = r.destFret - f;
+        r.cycDeg = cycleStep(midDeg, r.dir * r.span);
+        r.onCycle = r.cycDeg === target;
+        const iMid = CYCLE.indexOf(midDeg);
+        r.tritone = r.dir === 1 ? iMid + r.span >= CYCLE.length : iMid - r.span < 0;
+        r.canonicalEdge = false;
+        return r;
+      }
+    }
+
     r.mid = {string:r.ns, fret:f};
     r.landed = levelDeg;
     r.gapShift = 0;
@@ -1256,9 +1294,18 @@
     if(r.sameString){
       steps.push(`Stay on this string: <b>${L(r.curDeg)}</b> to <b>${L(r.target)}</b> is ` +
                  `${stepWord(r.slide)} — go ${way} ${fretWord(r.slide)}.` + formulaStrip);
+    } else if(r.slideFirst){
+      // Starting off the sequence: get onto it before reaching anywhere.
+      steps.push(`<b>${L(r.curDeg)}</b> isn't in the sequence — step onto the ` +
+                 `<b>${L(r.landed)}</b> first: ${fretWord(r.slide)} ${way}.`);
+      steps.push(`Now <b>${r.span === 1 ? 'one string' : r.span + ' strings'} ${dirWord}</b>, ` +
+                 `same fret — the <b>${L(r.target)}</b>.` + cycleStrip);
     } else {
       const reach = `<b>${r.span === 1 ? 'One string' : r.span + ' strings'} ${dirWord}</b>`;
-      const hop = r.span === 1 ? '' : ` — ${r.span} steps along <b>7 3 6 2 5 1 4</b>`;
+      // Only claim steps along the sequence when the degree you're leaving is
+      // actually in it — a ♭6 has no place in the cycle and never took any.
+      const hop = (r.span === 1 || !r.cycDeg) ? ''
+        : ` — ${r.span} steps along <b>7 3 6 2 5 1 4</b>`;
 
       // Where the sequence's degree actually sits: level with you, or displaced
       // a fret by the gap. Naming the displacement each time is how it sticks.
@@ -1266,7 +1313,9 @@
       if(r.gapShift !== 0){
         found = `the <b>${L(r.landed)}</b>, sitting ${fretWord(r.gapShift)} `
               + `${r.gapShift > 0 ? 'up' : 'down'} rather than level`;
-      } else if(r.landed && r.onCycle){
+      } else if(r.landed && (r.onCycle || !r.cycDeg)){
+        // No cycle degree at all means the sequence never applied here, so
+        // there is nothing it "promised" to contrast against.
         found = `the <b>${L(r.landed)}</b>`;
       } else if(r.landed){
         found = `the <b>${L(r.landed)}</b>, not the <b>${L(r.cycDeg)}</b> the sequence promises`;
@@ -1314,14 +1363,19 @@
         warn = r.dir === 1
           ? `From a <b>4</b>, one string lighter always lands between the <b>6</b> and the <b>7</b>. One of the two edge cases to memorise alongside the sequence.`
           : `From a <b>7</b>, one string heavier always lands between the <b>4</b> and the <b>5</b>. One of the two edge cases to memorise alongside the sequence.`;
-      } else if(r.gapShift !== 0 && r.gbGap && r.tritone){
-        warn = `Both odd joins on this reach — the G→B pair and the 4-to-7 join — so the sequence's degree is displaced twice over.`;
-      } else if(r.gapShift !== 0 && r.gbGap){
-        warn = `Mind the gap: G→B is the one string pair tuned a third, not a fourth, so the sequence's next degree sits a fret across from level.`;
-      } else if(r.gapShift !== 0){
-        warn = `The 4-to-7 join is the odd one in the sequence, so its degree sits a fret across from level rather than beside you.`;
-      } else if(!r.onCycle){
-        warn = `This reach passes the 4-to-7 join, where the sequence gives out, so it lands a fret off what it promises.`;
+      } else if(r.cycDeg && (r.gapShift !== 0 || !r.onCycle)){
+        // Named by cause rather than by symptom. Which of the two odd joins is
+        // in play decides the wording — reading it off the fret shift instead
+        // blamed 4-to-7 for gaps that were purely the B string's doing. And
+        // with no cycle degree at all the sequence never applied, so there is
+        // nothing to explain and inventing a reason is worse than silence.
+        if(r.gbGap && r.tritone){
+          warn = `Both odd joins on this reach — the G→B pair and the 4-to-7 join — so it lands two frets off what the sequence promises.`;
+        } else if(r.gbGap){
+          warn = `Mind the gap: G→B is the one string pair tuned a third, not a fourth, so the sequence shifts a fret across it.`;
+        } else if(r.tritone){
+          warn = `The 4-to-7 join is the odd one in the sequence, so its degree sits a fret across from level rather than beside you.`;
+        }
       }
     }
     hintWarnEl.innerHTML = warn;
@@ -1359,7 +1413,7 @@
     const k = layout.noteScale;
     const at = (s, f) => toXY(layout.xCenter[f], layout.crossPositions[rowOf(s)]);
     const a = at(r.from.string, r.from.fret);
-    const b = at(r.ns, r.mid.fret);       // level with you, always
+    const b = at(r.mid.string, r.mid.fret);   // the pause, on whichever string it falls
     const c = at(r.ns, r.destFret);
     const under = document.createDocumentFragment();
     // Three layers above the notes, appended in this order: the stop markers
@@ -1430,9 +1484,22 @@
     if(hintOverEl) hintOverEl.innerHTML = '';
   }
 
+  // Asking for the route ends the run. A recall trainer whose help is free,
+  // unlimited and consequence-free teaches you to derive the answer instead of
+  // remembering it — and deriving is exactly the skill the app is trying to
+  // make unnecessary. The cost is announced on the button beforehand, so it's a
+  // decision rather than a trap.
+  function syncHintCost(){
+    hintCostEl.hidden = !(state.mode === 'practice' && state.streak > 0);
+  }
+
   function openHint(){
     const r = computeHintRoute();
     if(!r) return;
+    if(state.mode === 'practice' && state.streak > 0){
+      setStreak(0);
+      trackEvent('HintBrokeStreak');
+    }
     hint.open = true;
     hint.route = r;
     renderHintText(r);

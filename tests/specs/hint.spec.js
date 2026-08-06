@@ -445,6 +445,58 @@ test.describe('the "how do I find it" hint', () => {
     });
   }
 
+  // Lowered degrees are a whole configuration the hint had never been run in,
+  // and it showed: it printed "not the undefined the sequence promises", and
+  // blamed the 4-to-7 join on every single route. A ♭6 has no place in the
+  // sequence, so neither claim could ever be true.
+  test('lowered degrees: steps onto the sequence before reaching across', async ({ page }) => {
+    await H.seedStorage(page, {
+      [H.STORAGE.onboarded]: '1',
+      [H.STORAGE.nudge]: '1',
+      [H.STORAGE.settings]: JSON.stringify({ includeFlats: true, noteDisplay: 'numerals' }),
+    });
+    await page.goto('/');
+    await page.waitForFunction(() => document.querySelectorAll('.fret-cell').length > 0);
+
+    let fromLowered = 0, steppedOn = 0;
+    for (let i = 0; i < 22; i++) {
+      const cur = (await page.locator('#curNum').textContent()).replace('♭', 'b');
+      await openHint(page);
+      const said = await stepText(page);
+      const warn = await page.locator('#hintWarn').isVisible()
+        ? await page.locator('#hintWarn').textContent() : '';
+
+      // Nothing may leak a missing value into the copy, ever.
+      expect(said, 'step text').not.toContain('undefined');
+      expect(warn, 'warning text').not.toContain('undefined');
+
+      if (cur.startsWith('b')) {
+        fromLowered++;
+        // A ♭ degree took no steps along a sequence it isn't part of.
+        expect(said, `claimed sequence steps from a ${cur}`).not.toContain('steps along');
+
+        const m = said.match(/step onto the (♭?\d) first: (\d+) frets? (up|down)/);
+        if (m) {
+          steppedOn++;
+          // The degree it says to step onto must be natural — that's the whole
+          // point — and must really be where the route pauses.
+          expect(m[1], 'stepped onto another lowered degree').not.toContain('♭');
+          const stop = await cellUnder(page, '.hint-stop');
+          expect(stop, 'a stepped route should draw its pause').not.toBeNull();
+          expect(stop.degree).toBe(m[1]);
+        }
+      }
+
+      await page.locator('#hintCloseBtn').click();
+      await H.tapDegree(page, await H.currentTarget(page), { onString: i % 6 });
+    }
+
+    // Roughly a third of degrees are lowered once they're enabled, so seeing
+    // none would mean this test never exercised the path it exists for.
+    expect(fromLowered, 'expected some turns starting on a lowered degree').toBeGreaterThan(2);
+    expect(steppedOn, 'expected some routes to step onto the sequence first').toBeGreaterThan(0);
+  });
+
   test('clears itself once the answer is given', async ({ page }) => {
     await H.gotoPlaying(page);
     await openHint(page);
@@ -471,13 +523,23 @@ test.describe('the "how do I find it" hint', () => {
     expect(await H.streak(page)).toBe('1');
   });
 
-  test('using it costs nothing — the streak still builds', async ({ page }) => {
+  test('asking for the route ends the streak, and says so first', async ({ page }) => {
     await H.gotoPlaying(page);
-    for (let i = 0; i < 3; i++) {
-      await openHint(page);
-      await H.tapDegree(page, await H.currentTarget(page));
-    }
+
+    // Nothing to lose yet, so no warning and no cost.
+    await expect(page.locator('#hintCost')).toBeHidden();
+    await H.playCorrect(page, 3);
     expect(await H.streak(page)).toBe('3');
+    await expect(page.locator('#hintCost')).toBeVisible();
+
+    await openHint(page);
+    expect(await H.streak(page), 'the run ends when you take the help').toBe('0');
+    await expect(page.locator('#hintCost')).toBeHidden();
+
+    // The board still works — it costs the streak, not the turn.
+    await page.locator('#hintCloseBtn').click();
+    await H.playCorrect(page, 1);
+    expect(await H.streak(page)).toBe('1');
   });
 
   test('is not available during a Time Attack run', async ({ page }) => {

@@ -215,6 +215,11 @@
     color:var(--muted); font-family:inherit; font-size:12.5px; padding:9px 12px;
   }
   .hint-ask b{ color:var(--seek); font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  /* Stated up front, so taking the help is a choice rather than a surprise. */
+  .hint-cost{
+    display:block; margin-top:2px; font-size:10.5px; color:var(--miss); opacity:.85;
+  }
+  .hint-cost[hidden]{ display:none; }
   .hint-ask:active{ background:var(--panel-3); }
   .hint-ask[hidden]{ display:none; }
 
