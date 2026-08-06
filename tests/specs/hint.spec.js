@@ -239,11 +239,37 @@ test.describe('the "how do I find it" hint', () => {
 
       if (reach) {
         reaches++;
-        const cur = (await page.locator('#curNum').textContent()).replace('♭', 'b');
-        const expected = cycleStep(cur, reach.dir * reach.span);
-        // Only one ring is drawn when the stop is already the destination.
-        const stop = await cellUnder(page, '.hint-stop') || await cellUnder(page, '.hint-dest');
-        expect(stop, 'the route should stop on a real cell').not.toBeNull();
+        // The reach sets off from wherever the route is standing when it
+        // crosses — which is the stepped-onto degree when it stepped onto the
+        // sequence first, not the degree on the plaque. Reading the plaque
+        // instead made this skip every lowered-degree route silently.
+        const stepOn = said.match(/step onto the (♭?\d) first/);
+        const origin = stepOn ? stepOn[1].replace('♭', 'b')
+          : (await page.locator('#curNum').textContent()).replace('♭', 'b');
+        const expected = cycleStep(origin, reach.dir * reach.span);
+
+        // With a leading step there are two pauses drawn; the reach's landing
+        // is the one on the destination's string.
+        const markers = await page.evaluate(() => {
+          const out = [];
+          for (const el of document.querySelectorAll('.hint-stop, .hint-dest')) {
+            const r = el.getBoundingClientRect();
+            const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+            for (const c of document.querySelectorAll('.fret-cell')) {
+              const b = c.getBoundingClientRect();
+              if (cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom) {
+                out.push({ dest: el.classList.contains('hint-dest'),
+                           string: +c.dataset.string, fret: +c.dataset.fret,
+                           degree: c.dataset.degree || null });
+                break;
+              }
+            }
+          }
+          return out;
+        });
+        const destMark = markers.find((m) => m.dest);
+        expect(destMark, 'the route should draw a destination').not.toBeUndefined();
+        const stop = markers.find((m) => !m.dest && m.string === destMark.string) || destMark;
 
         if (await page.locator('.hint-branch').count()) {
           // A fork stays level, in the crack — there is no degree to stop on.
@@ -263,7 +289,7 @@ test.describe('the "how do I find it" hint', () => {
 
           if (inReach) {
             expect(stop.degree,
-              `on a ${cur}, ${reach.span} string(s) ${reach.dir === 1 ? 'thinner' : 'thicker'}: ` +
+              `from a ${origin}, ${reach.span} string(s) ${reach.dir === 1 ? "thinner" : "thicker"}: ` +
               `sequence says ${expected}, route stopped on ${stop.degree}`).toBe(expected);
             if (/rather than level/.test(said)) displaced++;
           }
@@ -472,10 +498,15 @@ test.describe('the "how do I find it" hint', () => {
 
       if (cur.startsWith('b')) {
         fromLowered++;
-        // A ♭ degree took no steps along a sequence it isn't part of.
-        expect(said, `claimed sequence steps from a ${cur}`).not.toContain('steps along');
-
         const m = said.match(/step onto the (♭?\d) first: (\d+) frets? (up|down)/);
+
+        // The sequence may only be claimed from a degree that's in it. Stepping
+        // onto one first earns that right; reaching straight off a ♭ degree
+        // does not.
+        if (!m) {
+          expect(said, `claimed sequence steps from a ${cur}`).not.toContain('steps along');
+        }
+
         if (m) {
           steppedOn++;
           // The degree it says to step onto must be natural — that's the whole

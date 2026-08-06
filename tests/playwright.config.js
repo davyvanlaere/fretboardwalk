@@ -10,11 +10,11 @@ module.exports = defineConfig({
   timeout: 90_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,
-  // Left to itself Playwright takes half the cores, which on a 16-thread box
-  // means eight browsers competing for the same animation frames. The tap-heavy
-  // specs then time out on contention alone — they pass comfortably in
-  // isolation. Fewer workers is both faster overall and stable.
-  workers: process.env.CI ? 2 : 3,
+  // Capped rather than left to Playwright's half-the-cores default, which on a
+  // 16-thread box means eight browsers. Paired with reducedMotion below — that
+  // is what actually removed the timeouts, so this is headroom rather than the
+  // fix. Measured: 4 workers 3.6 min, 2 workers 5.2 min, both clean.
+  workers: 4,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
@@ -23,6 +23,12 @@ module.exports = defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // Every open page otherwise runs several looping CSS animations — pulsing
+    // notes, dashed route legs, the spotlight — so parallel workers starve each
+    // other of frames and the tap-heavy specs time out on that alone. The app
+    // already honours this setting and only ever animates decoration, so
+    // nothing under test changes; the machine just stops burning frames on it.
+    reducedMotion: 'reduce',
   },
 
   // Two viewports because the layout genuinely differs: below 1100px the neck

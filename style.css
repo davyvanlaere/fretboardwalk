@@ -422,13 +422,24 @@
     text-transform:uppercase; color:var(--dim); margin-bottom:3px;
   }
   /* Numeral and roman share one baseline-aligned row, so the tile is a line
-     shorter than it used to be and that height goes to the neck. */
-  .plaque-val{ display:flex; align-items:baseline; gap:7px; }
-  .plaque .num{ font-size:30px; font-weight:600; line-height:1.05; letter-spacing:-.02em; }
+     shorter than it used to be and that height goes to the neck.
+     A three-column grid rather than a flex row: the numeral owns the middle
+     column and so stays dead centre under the label, while the roman hangs off
+     its left. Centring a flex row instead would shift the numeral sideways
+     every time the roman changed width — I to vii° — and it's the one thing on
+     screen you re-read every few seconds. */
+  .plaque-val{
+    display:grid; grid-template-columns:1fr auto 1fr; align-items:baseline;
+  }
+  .plaque .num{
+    grid-column:2; font-size:30px; font-weight:600;
+    line-height:1.05; letter-spacing:-.02em;
+  }
   .plaque .num.wide{ font-size:25px; }
   .plaque .roman{
+    grid-column:1; justify-self:end; padding-right:7px;
     font-family:'IBM Plex Mono', monospace; font-size:10.5px;
-    color:var(--dim); flex:0 0 auto;
+    color:var(--dim); white-space:nowrap;
   }
   .plaque.current .num{ color:var(--live); }
   .plaque.target .num{ color:var(--seek); }
@@ -849,7 +860,7 @@
     .plaque .num{ font-size:70px; }
     .plaque .num.wide{ font-size:54px; }
     .plaque .roman{ font-size:14px; }
-    .plaque-val{ gap:10px; }
+    .plaque .roman{ padding-right:10px; }
 
     /* Rail stacks the plaques vertically, so the action tile goes full-width
        below Find and reads with a bit more presence than the phone tile. */

@@ -256,6 +256,14 @@
   }
   function pitchClassAt(s,f){ return (STRINGS[s].midi + f) % 12; }
 
+  // The major scale only, ignoring the lowered-degrees setting. The 7 3 6 2 5 1 4
+  // sequence is built on the major scale, so anything reasoning about the
+  // sequence has to ask this rather than degreeAt().
+  function majorDegreeAt(s,f){
+    const diff = (pitchClassAt(s,f) - KEYS[state.keyIndex].pc + 12) % 12;
+    return MAJOR_OFFSETS[diff] || null;
+  }
+
   function enabledDegrees(){
     return state.includeFlats ? BASE_DEGREES.concat(FLAT_DEGREES) : BASE_DEGREES;
   }
@@ -1013,123 +1021,162 @@
     return i < 0 ? null : CYCLE[((i + n) % CYCLE.length + CYCLE.length) % CYCLE.length];
   };
 
+  // ---------- route planning ----------
+  // Every route has the same shape:
+  //
+  //     [step onto the sequence]  →  reach across  →  [slide to the target]
+  //
+  // Both slides are optional; the reach is skipped only when the target is
+  // closest on the string you're already standing on. The first slide exists
+  // for one reason: a lowered degree has no place in the sequence, so from a ♭6
+  // there is no "next one along" and the reach can't be explained until you've
+  // stepped onto a natural degree.
+  //
+  // Which of four shapes a route takes decides its legs, its wording and its
+  // diagram together, so it's decided once here rather than re-derived from a
+  // handful of booleans at three different call sites.
+  //
+  //   sameString   just slide; the target is closest where you already are
+  //   edgeCase     the reach lands in the sequence's one hole; the hole is the
+  //                lesson, so stay level and slide out of it
+  //   reachSlide   the common case: reach to the sequence's degree wherever the
+  //                neck has put it, then slide
+  //   bare         a reach the sequence can't account for — true, but it only
+  //                says "it's over there", so it's priced accordingly
+  const ROUTE_MAX_SPAN = 3;
+  // Priced by what the route costs to WORK OUT, not by how far the hand moves.
+  // Those pull opposite ways: crossing a string is physically free but is
+  // another step along the sequence to compute, while a slide is one interval
+  // lookup whether it's one fret or three.
+  const ROUTE_FRET_COST = 1;
+  const ROUTE_SPAN_COST = 1.5;
+  // A same-string route is a true answer but teaches nothing about how the neck
+  // is laid out, so it has to be clearly better to win.
+  const ROUTE_SAME_STRING_COST = 1.5;
+  // Nor should a reach the sequence can't explain be free: from a ♭7, "two
+  // strings thinner is the 5" is a bare positional fact. Paying a fret to step
+  // onto the sequence first buys an explanation, and that's the point.
+  const ROUTE_UNEXPLAINED_COST = 2;
+
+  // Which string to land on, and where. Knows nothing about the sequence — this
+  // is purely "what is the cheapest place to end up from here".
+  function chooseDestination(s, f, target){
+    let best = null;
+    for(let ns = 0; ns <= 5; ns++){
+      const span = Math.abs(ns - s);
+      if(span > ROUTE_MAX_SPAN) continue;
+      const offs = offsetsTo(ns, f, target);
+      if(!offs.length) continue;
+      const cost = Math.abs(offs[0]) * ROUTE_FRET_COST + span * ROUTE_SPAN_COST +
+                   (span === 0 ? ROUTE_SAME_STRING_COST : 0);
+      // Ties go to the shorter reach, then to the thinner string — the
+      // direction a hand usually travels.
+      if(!best || cost < best.cost ||
+         (cost === best.cost && span < best.span) ||
+         (cost === best.cost && span === best.span && ns > best.ns)){
+        best = {ns, span, cost, fret:f + offs[0],
+                dir: ns === s ? 0 : (ns > s ? 1 : -1), sameString: ns === s};
+      }
+    }
+    return best;
+  }
+
+  // The two degrees a fret sits between when the major scale has nothing there.
+  // Measured against the major scale alone on purpose: the sequence is a
+  // major-scale construct, so its hole is a hole whether or not the board is
+  // currently labelling that hole ♭7.
+  function gapBetween(ns, f){
+    if(majorDegreeAt(ns, f)) return null;
+    if(f <= 0 || f >= FRET_COUNT) return null;
+    const lo = majorDegreeAt(ns, f - 1), hi = majorDegreeAt(ns, f + 1);
+    return (lo && hi) ? [lo, hi] : null;
+  }
+
+  // Where the reach may set off from: where you are, plus — when that's a
+  // lowered degree — the natural degrees within a couple of frets on the same
+  // string. Anything further isn't a step onto the sequence, it's a journey.
+  function reachOrigins(s, f, curDeg){
+    const origins = [{fret:f, deg:curDeg, lead:0}];
+    if(CYCLE.indexOf(curDeg) < 0){
+      for(const d of [1, -1, 2, -2]){
+        const nf = f + d;
+        if(nf < 0 || nf > FRET_COUNT) continue;
+        const nd = majorDegreeAt(s, nf);
+        if(nd && CYCLE.indexOf(nd) >= 0) origins.push({fret:nf, deg:nd, lead:d});
+      }
+    }
+    return origins;
+  }
+
   function computeHintRoute(){
     if(!layout) return null;
     const s = state.current.string, f = state.current.fret;
     const target = state.targetDegree;
     const curDeg = degreeAt(s, f);
 
-    // Priced by what the route costs to WORK OUT, not by how far the hand
-    // moves. Those pull opposite ways: crossing a string is physically free but
-    // is another step along the sequence to compute, while a slide is one
-    // interval lookup whether it's one fret or three. Pricing frets high (the
-    // physical view) picked two-string reaches over a one-string reach with a
-    // slightly bigger slide — cheaper for the hand, more to think about.
-    // Measured over every position: this cuts two-string reaches from 21% to
-    // 16%, removes three-string ones almost entirely, and still keeps 96% of
-    // slides within two frets.
-    const MAX_SPAN = 3;
-    const FRET_COST = 1;
-    const SPAN_COST = 1.5;
-    // A same-string route is a true answer but teaches nothing about how the
-    // neck is laid out, so it has to be clearly better to win.
-    const SAME_STRING_COST = 1.5;
-
-    let r = null;
-    for(let ns = 0; ns <= 5; ns++){
-      const span = Math.abs(ns - s);
-      if(span > MAX_SPAN) continue;
-      const offs = offsetsTo(ns, f, target);
-      if(!offs.length) continue;
-      const cost = Math.abs(offs[0]) * FRET_COST + span * SPAN_COST +
-                   (span === 0 ? SAME_STRING_COST : 0);
-      // Ties go to the shorter reach, then to the thinner string — the
-      // direction a hand usually travels.
-      if(!r || cost < r.cost || (cost === r.cost && span < r.span) ||
-         (cost === r.cost && span === r.span && ns > r.ns)){
-        r = {ns, span, cost, destFret:f + offs[0],
-             dir: ns === s ? 0 : (ns > s ? 1 : -1), sameString: ns === s};
-      }
+    let pick = null;
+    for(const o of reachOrigins(s, f, curDeg)){
+      const d = chooseDestination(s, o.fret, target);
+      if(!d) continue;
+      const unexplained = !d.sameString && CYCLE.indexOf(o.deg) < 0;
+      const cost = d.cost + Math.abs(o.lead) * ROUTE_FRET_COST +
+                   (unexplained ? ROUTE_UNEXPLAINED_COST : 0);
+      if(!pick || cost < pick.cost) pick = {o, d, cost};
     }
-    if(!r) return null;
+    if(!pick) return null;
+    return planRoute(s, f, curDeg, target, pick.o, pick.d);
+  }
 
-    r.from = {string:s, fret:f};
-    r.dest = {string:r.ns, fret:r.destFret};
-    r.curDeg = curDeg;
-    r.target = target;
-    r.cycDeg = r.sameString ? null : cycleStep(curDeg, r.dir * r.span);
-    r.gbGap = !r.sameString && Math.min(s, r.ns) <= 3 && Math.max(s, r.ns) >= 4;
-    const iCur = CYCLE.indexOf(curDeg);
-    r.tritone = iCur >= 0 && !r.sameString &&
-      (r.dir === 1 ? iCur + r.span >= CYCLE.length : iCur - r.span < 0);
+  // Turns a chosen origin and destination into a complete route. Every branch
+  // returns a finished object, so no field is ever assigned twice.
+  function planRoute(s, f, curDeg, target, o, d){
+    const base = {
+      kind:null, from:{string:s, fret:f}, step:{string:s, fret:o.fret},
+      dest:{string:d.ns, fret:d.fret}, lead:o.lead, stepDeg:o.deg,
+      ns:d.ns, span:d.span, dir:d.dir, destFret:d.fret, curDeg, target,
+      gbGap: !d.sameString && Math.min(s, d.ns) <= 3 && Math.max(s, d.ns) >= 4,
+      between:null, gapShift:0, cycDeg:null, onCycle:false, tritone:false,
+    };
 
-    // What is sitting level with you, and — when nothing is — the two degrees
-    // you've landed between.
-    const levelDeg = r.sameString ? curDeg : degreeAt(r.ns, f);
-    let between = null;
-    if(!r.sameString && !levelDeg && f > 0 && f < FRET_COUNT){
-      const lo = degreeAt(r.ns, f - 1), hi = degreeAt(r.ns, f + 1);
-      if(lo && hi) between = [lo, hi];
-    }
-    r.between = between;
-
-    // The two edge cases in the form actually worth memorising: one step across
-    // the 4-to-7 join, landing in the pair that always sits there. A longer
-    // reach can cross the same join but carries the error onward and lands
-    // somewhere else entirely — a 7 reaching two strings heavier ends up between
-    // the 1 and the 2, which is true but teaches nothing.
-    const pair = r.dir === 1 ? ['6','7'] : ['4','5'];
-    r.canonicalEdge = !!(r.tritone && between &&
-      between[0] === pair[0] && between[1] === pair[1]);
-
-    // Where the route pauses. Level with you by default — but when the
-    // sequence's degree isn't level, the route goes through it anyway, because
-    // that degree is the thing being taught. Crossing G→B doesn't break the
-    // sequence, it just displaces it a fret; describing where you happen to
-    // land instead teaches a coincidence that only holds on that one string
-    // pair. From a 5, "one string thinner is the 7" is true across G→B and
-    // false everywhere else — whereas "the sequence says 1, the gap puts it a
-    // fret up, and your 7 is a half step below it" is true and transferable.
-    //
-    // The tritone is the one case with no degree to reach at all, so it keeps
-    // the level landing and the crack becomes the lesson.
-    // Lowered degrees aren't in the sequence at all — there is no "next one
-    // along" from a ♭6. So the first move is onto a natural degree, along the
-    // string you're already on, and only then does reaching across mean
-    // anything. Sliding to the destination's own fret makes that reach level by
-    // construction, so the sequence explains it cleanly.
-    if(!r.sameString && iCur < 0){
-      const midDeg = degreeAt(s, r.destFret);
-      if(midDeg && CYCLE.indexOf(midDeg) >= 0){
-        r.slideFirst = true;
-        r.mid = {string:s, fret:r.destFret};
-        r.landed = midDeg;
-        r.gapShift = 0;
-        r.slide = r.destFret - f;
-        r.cycDeg = cycleStep(midDeg, r.dir * r.span);
-        r.onCycle = r.cycDeg === target;
-        const iMid = CYCLE.indexOf(midDeg);
-        r.tritone = r.dir === 1 ? iMid + r.span >= CYCLE.length : iMid - r.span < 0;
-        r.canonicalEdge = false;
-        return r;
-      }
+    if(d.sameString){
+      return Object.assign(base, {kind:'sameString',
+        mid:{string:s, fret:o.fret}, landed:o.deg, slide:d.fret - o.fret});
     }
 
-    r.mid = {string:r.ns, fret:f};
-    r.landed = levelDeg;
-    r.gapShift = 0;
-    if(!r.sameString && !r.canonicalEdge && r.cycDeg && levelDeg !== r.cycDeg){
-      const o = offsetsTo(r.ns, f, r.cycDeg);
+    const iFrom = CYCLE.indexOf(o.deg);
+    const cycDeg = cycleStep(o.deg, d.dir * d.span);
+    const tritone = iFrom >= 0 &&
+      (d.dir === 1 ? iFrom + d.span >= CYCLE.length : iFrom - d.span < 0);
+    const between = gapBetween(d.ns, o.fret);
+    const pair = d.dir === 1 ? ['6','7'] : ['4','5'];
+
+    // The edge case worth memorising: one step across the 4-to-7 join, landing
+    // in the pair that always sits there. A longer reach can cross the same
+    // join but carries the error onward and lands somewhere else entirely — a 7
+    // reaching two strings heavier ends up between the 1 and the 2, which is
+    // true but teaches nothing. Checking the landed pair rather than the step
+    // count also catches a G→B crossing shifting things again.
+    if(tritone && between && between[0] === pair[0] && between[1] === pair[1]){
+      return Object.assign(base, {kind:'edgeCase',
+        mid:{string:d.ns, fret:o.fret}, landed:degreeAt(d.ns, o.fret),
+        slide:d.fret - o.fret, cycDeg, tritone, between});
+    }
+
+    // Reach to the sequence's degree wherever the neck has put it. Crossing G→B
+    // doesn't break the sequence, it just displaces it a fret; describing what
+    // happens to sit level instead teaches a coincidence that only holds on
+    // that one string pair.
+    let midFret = o.fret;
+    if(cycDeg){
+      const off = offsetsTo(d.ns, o.fret, cycDeg);
       // More than a couple of frets isn't a seam, it's the neck running out.
-      if(o.length && Math.abs(o[0]) <= 2){
-        r.mid = {string:r.ns, fret:f + o[0]};
-        r.landed = r.cycDeg;
-        r.gapShift = o[0];
-      }
+      if(off.length && Math.abs(off[0]) <= 2) midFret = o.fret + off[0];
     }
-    r.onCycle = !!r.cycDeg && r.landed === r.cycDeg;
-    r.slide = r.destFret - r.mid.fret;
-    return r;
+    const landed = midFret === o.fret ? degreeAt(d.ns, o.fret) : cycDeg;
+    return Object.assign(base, {kind: cycDeg ? 'reachSlide' : 'bare',
+      mid:{string:d.ns, fret:midFret}, landed,
+      slide:d.fret - midFret, gapShift:midFret - o.fret,
+      cycDeg, onCycle: !!cycDeg && landed === cycDeg, tritone, between});
   }
 
   function fretWord(n){
@@ -1169,11 +1216,15 @@
   // involved — those aren't in the cycle and pretending otherwise teaches
   // something false.
   function cycleStripHtml(r){
-    if(r.sameString) return '';
+    if(r.kind === 'sameString') return '';
     // Always the sequence's own path — where it says you should end up. When an
     // edge case means you don't land there, the strip still shows the promise
     // and the seam ends light up to say why it wasn't kept.
-    const iFrom = CYCLE.indexOf(r.curDeg);
+    // Keyed on where the REACH sets off from, not where you're standing. With a
+    // step onto the sequence first those differ — the reach leaves from the 6,
+    // not the ♭6 — and looking up the ♭6 found nothing, so the strip silently
+    // vanished from exactly the routes that most need it explained.
+    const iFrom = CYCLE.indexOf(r.stepDeg);
     const iTo   = CYCLE.indexOf(r.cycDeg);
     if(iFrom < 0 || iTo < 0) return '';
 
@@ -1212,7 +1263,7 @@
   // 4 you're heading to a lighter string (fork opens right), from a 7 to a
   // heavier one (fork opens left).
   function branchFigureHtml(r){
-    if(!r.canonicalEdge) return '';
+    if(r.kind !== 'edgeCase') return '';
     const solo = r.dir === 1 ? '4' : '7';
     const [lo, hi] = r.between;        // a fret down, and a fret up
     const W = 150, flip = r.dir === -1;
@@ -1240,9 +1291,15 @@
       + ` role="img" aria-label="From the ${solo}, one string over lands between the ${lo} and the ${hi}">`
       + box(2, 12, solo)
       + `<path d="M${X(32)},22 H${X(62)}" stroke="var(--seek)" stroke-width="1.6"/>`
-      // where you actually land: nothing, in the crack between the two
-      + `<circle cx="${X(62)}" cy="22" r="6" fill="none" stroke="var(--miss)"`
+      // Where you actually land: the hole in the major scale between the two.
+      // With lowered degrees switched on it has a name, and showing it makes
+      // the point that ♭7 lives exactly where the sequence has nothing.
+      + `<circle cx="${X(62)}" cy="22" r="${r.landed ? 10 : 6}" fill="none" stroke="var(--miss)"`
       + ` stroke-width="1.4" stroke-dasharray="3 2.5"/>`
+      + (r.landed
+        ? `<text x="${X(62)}" y="25.5" text-anchor="middle" font-size="10.5"`
+          + ` font-weight="600" fill="var(--miss)">${DEGREE_LABEL[r.landed]}</text>`
+        : '')
       + limb(10) + limb(34) + arrow(10) + arrow(34)
       // Lower fret on top, higher fret below — matching the neck, where fret
       // numbers grow downward away from the nut. Ordering these by pitch
@@ -1291,24 +1348,45 @@
     const cycleStrip = cycleStripHtml(r);
     const formulaStrip = formulaStripHtml(r);
 
-    if(r.sameString){
-      steps.push(`Stay on this string: <b>${L(r.curDeg)}</b> to <b>${L(r.target)}</b> is ` +
-                 `${stepWord(r.slide)} — go ${way} ${fretWord(r.slide)}.` + formulaStrip);
-    } else if(r.slideFirst){
-      // Starting off the sequence: get onto it before reaching anywhere.
-      steps.push(`<b>${L(r.curDeg)}</b> isn't in the sequence — step onto the ` +
-                 `<b>${L(r.landed)}</b> first: ${fretWord(r.slide)} ${way}.`);
-      steps.push(`Now <b>${r.span === 1 ? 'one string' : r.span + ' strings'} ${dirWord}</b>, ` +
-                 `same fret — the <b>${L(r.target)}</b>.` + cycleStrip);
-    } else {
-      const reach = `<b>${r.span === 1 ? 'One string' : r.span + ' strings'} ${dirWord}</b>`;
-      // Only claim steps along the sequence when the degree you're leaving is
-      // actually in it — a ♭6 has no place in the cycle and never took any.
-      const hop = (r.span === 1 || !r.cycDeg) ? ''
-        : ` — ${r.span} steps along <b>7 3 6 2 5 1 4</b>`;
+    const reach = `${r.span === 1 ? 'One string' : r.span + ' strings'} ${dirWord}`;
+    // Only claim steps along the sequence when the degree you're leaving is
+    // actually in it — a ♭6 has no place in the cycle and never took any.
+    const hop = (r.span === 1 || !r.cycDeg) ? ''
+      : ` — ${r.span} steps along <b>7 3 6 2 5 1 4</b>`;
+    // The slide leg, worded from wherever the route paused. "The lower one"
+    // reads straight off the sentence above when the pause was in a gap;
+    // naming a scale interval only makes sense from an actual degree.
+    const slideStep = () => (r.landed
+      ? `<b>${L(r.landed)}</b> to <b>${L(r.target)}</b> is ${stepWord(r.slide)} — go ${way} ${fretWord(r.slide)}.`
+      : `Your <b>${L(r.target)}</b> is the ${r.slide > 0 ? 'higher' : 'lower'} one — ${fretWord(r.slide)} ${way}.`
+    ) + formulaStrip;
 
-      // Where the sequence's degree actually sits: level with you, or displaced
-      // a fret by the gap. Naming the displacement each time is how it sticks.
+    // The optional first leg, present only when you started off the sequence.
+    if(r.lead !== 0){
+      const lw = r.lead > 0 ? 'up' : 'down';
+      steps.push(`<b>${L(r.curDeg)}</b> isn't in the sequence — step onto the ` +
+                 `<b>${L(r.stepDeg)}</b> first: ${fretWord(r.lead)} ${lw}.`);
+    }
+
+    if(r.kind === 'sameString'){
+      steps.push(`Stay on this string: <b>${L(r.stepDeg)}</b> to <b>${L(r.target)}</b> is ` +
+                 `${stepWord(r.slide)} — go ${way} ${fretWord(r.slide)}.` + formulaStrip);
+
+    } else if(r.kind === 'edgeCase'){
+      // The fork comes FIRST in source order: a right-floated element only
+      // clears the line it's declared on, so putting it after the text pushed
+      // it down a row and wasted the height the float was meant to save. It
+      // also finishes the sentence, so the words don't repeat the picture.
+      steps.push(branch + `<b>${reach}</b>, same fret${hop} — ` +
+        (r.landed ? `the <b>${L(r.landed)}</b>, sitting in the sequence's gap:`
+                  : `you land in the gap:`));
+      if(r.slide !== 0) steps.push(slideStep());
+
+    } else {
+      // "Same fret" is the rule, so only claim it when it held; naming the
+      // displacement each time it doesn't is how the exception sticks.
+      const level = r.gapShift === 0 ? ', same fret' : '';
+
       let found;
       if(r.gapShift !== 0){
         found = `the <b>${L(r.landed)}</b>, sitting ${fretWord(r.gapShift)} `
@@ -1324,26 +1402,9 @@
       } else {
         found = `nothing in the key`;
       }
-      // With the fork alongside, spelling the pair out again in words just
-      // costs a line to say the same thing twice — let the picture finish the
-      // sentence.
-      // The fork comes FIRST in source order: a right-floated element only
-      // clears the line it's declared on, so putting it after the text pushed
-      // it down a row and wasted the height the float was meant to save.
-      // "Same fret" is the rule, so only claim it when it held.
-      const level = r.gapShift === 0 ? ', same fret' : '';
-      steps.push(branch
-        ? branch + `${reach}, same fret${hop} — you land in the gap:`
-        : `${reach}${level}${hop} — ${found}.` + cycleStrip);
 
-      if(r.slide !== 0){
-        // "The lower one" reads straight off the sentence above when you landed
-        // in a crack; naming a scale interval only makes sense from a degree.
-        const lead = r.landed
-          ? `<b>${L(r.landed)}</b> to <b>${L(r.target)}</b> is ${stepWord(r.slide)} — go ${way} ${fretWord(r.slide)}.`
-          : `Your <b>${L(r.target)}</b> is the ${r.slide > 0 ? 'higher' : 'lower'} one — ${fretWord(r.slide)} ${way}.`;
-        steps.push(lead + formulaStrip);
-      }
+      steps.push(`<b>${reach}</b>${level}${hop} — ${found}.` + cycleStrip);
+      if(r.slide !== 0) steps.push(slideStep());
     }
 
     hintStepsEl.innerHTML = steps.map(s => `<li>${s}</li>`).join('');
@@ -1358,8 +1419,8 @@
     // fact rather than the reason — there are exactly two of these to carry,
     // and they're learned the way the open strings are, not derived.
     let warn = '';
-    if(!r.sameString){
-      if(r.canonicalEdge){
+    if(r.kind !== 'sameString'){
+      if(r.kind === 'edgeCase'){
         warn = r.dir === 1
           ? `From a <b>4</b>, one string lighter always lands between the <b>6</b> and the <b>7</b>. One of the two edge cases to memorise alongside the sequence.`
           : `From a <b>7</b>, one string heavier always lands between the <b>4</b> and the <b>5</b>. One of the two edge cases to memorise alongside the sequence.`;
@@ -1459,16 +1520,25 @@
       stops.appendChild(t);
     };
 
-    if(!r.sameString) addLeg(a, b);
-    if(r.slide !== 0){
-      // The staging post only earns a marker when it's somewhere you stop.
-      if(!r.sameString){
-        rings.appendChild(el('circle', {cx:b.x, cy:b.y, r:17*k, fill:'none',
-          stroke:'var(--seek)', 'stroke-width':2*k, opacity:.55, class:'hint-stop'}));
-        nameStop(b, r.landed);
-      }
-      addLeg(b, c);
+    // Walk the route as a list of stops rather than a fixed pair of legs, so a
+    // leading step onto the sequence draws like any other move and the badges
+    // stay in step with the panel's numbering however many legs there are.
+    const stopsOnRoute = [{p:a, deg:r.curDeg, mark:false}];
+    if(r.lead !== 0) stopsOnRoute.push({p:at(r.step.string, r.step.fret), deg:r.stepDeg, mark:true});
+    if(r.kind !== 'sameString' && r.slide !== 0) stopsOnRoute.push({p:b, deg:r.landed, mark:true});
+    stopsOnRoute.push({p:c, deg:r.target, mark:false});
+
+    for(let i = 1; i < stopsOnRoute.length; i++){
+      addLeg(stopsOnRoute[i - 1].p, stopsOnRoute[i].p);
+      const st = stopsOnRoute[i];
+      if(!st.mark) continue;
+      // The pauses along the way earn a marker; the destination gets its own
+      // heavier ring below.
+      rings.appendChild(el('circle', {cx:st.p.x, cy:st.p.y, r:17*k, fill:'none',
+        stroke:'var(--seek)', 'stroke-width':2*k, opacity:.55, class:'hint-stop'}));
+      nameStop(st.p, st.deg);
     }
+
     rings.appendChild(el('circle', {cx:c.x, cy:c.y, r:18*k, fill:'none',
       stroke:'var(--seek)', 'stroke-width':2.5*k, class:'hint-dest'}));
     nameStop(c, r.target);
