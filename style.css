@@ -1,4 +1,38 @@
-  :root{
+  /* Metric-matched fallback faces.
+   The webfont stylesheet is fetched asynchronously so it never blocks render —
+   but that means text first paints in a system font and reflows when the real
+   face arrives, which was shifting the layout of every page on the site (CLS
+   0.10-0.22, over Google's 0.1 threshold and a ranking signal). These faces
+   make the fallback occupy the same space as the real font, so the swap moves
+   nothing. The percentages are measured against the site's own prose by
+   tests/genfallback.js. The one exception is the 400-500 size-adjust: the
+   measured best-fit is 109.39%, but pages wrap in whole lines, so the value
+   that matches average width best is not the one that shifts least. 108.20%
+   was picked by sweeping the value against real CLS on every page; it takes
+   the site's worst case from 0.215 to 0.044. Re-tune by measurement, not by
+   eye, if the type ever changes. */
+@font-face{
+  font-family:'Space Grotesk Fallback'; src:local('Arial');
+  font-weight:400 500;
+  size-adjust:108.20%; ascent-override:89.59%; descent-override:26.51%; line-gap-override:0%;
+}
+@font-face{
+  font-family:'Space Grotesk Fallback'; src:local('Arial Bold'), local('Arial');
+  font-weight:600 700;
+  size-adjust:101.77%; ascent-override:96.29%; descent-override:28.50%; line-gap-override:0%;
+}
+@font-face{
+  font-family:'IBM Plex Mono Fallback'; src:local('Courier New');
+  font-weight:400 500;
+  size-adjust:100.03%; ascent-override:102.97%; descent-override:27.99%; line-gap-override:0%;
+}
+@font-face{
+  font-family:'IBM Plex Mono Fallback'; src:local('Courier New Bold'), local('Courier New');
+  font-weight:600 700;
+  size-adjust:100.03%; ascent-override:102.97%; descent-override:27.99%; line-gap-override:0%;
+}
+
+:root{
     /* Cool graphite + LED accents: reads like rack gear rather than parchment. */
     --bg:#0a0c10;
     --panel:#12161c;
@@ -35,7 +69,7 @@
     background:
       radial-gradient(ellipse 780px 420px at 50% 0%, #141a22 0%, transparent 62%),
       linear-gradient(180deg, #0a0c10 0%, #06080b 100%);
-    font-family:'Space Grotesk', system-ui, sans-serif;
+    font-family:'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
     color:var(--text);
     overscroll-behavior:none;
   }
@@ -99,7 +133,7 @@
     display:flex; align-items:baseline; gap:5px;
     background:var(--panel-2); border:1px solid var(--line);
     border-radius:9px; padding:8px 11px;
-    font-family:'IBM Plex Mono', monospace;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
     transition:border-color .2s, box-shadow .2s;
   }
   .streak .v{ font-size:14.5px; font-weight:600; color:var(--text); line-height:1; display:inline-block; }
@@ -124,7 +158,7 @@
   /* A "🔥 N" that rises and fades out of the box on each milestone. */
   .combo-burst{
     position:absolute; left:50%; top:0; transform:translate(-50%,0);
-    font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:700;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:12px; font-weight:700;
     color:var(--seek); white-space:nowrap; pointer-events:none; opacity:0;
   }
   @keyframes comboBurstRise{
@@ -141,7 +175,7 @@
   .key-select select{
     appearance:none; -webkit-appearance:none;
     background:var(--bg); border:1px solid var(--line);
-    color:var(--text); font-family:'IBM Plex Mono', monospace; font-size:12px;
+    color:var(--text); font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:12px;
     padding:8px 26px 8px 11px; border-radius:8px; cursor:pointer;
   }
   #keyRow[hidden]{ display:none; }
@@ -168,7 +202,7 @@
     display:flex; align-items:center; justify-content:center;
     background:var(--panel-2); border:1px solid var(--line);
     border-radius:9px; cursor:pointer;
-    color:var(--muted); font-family:'IBM Plex Mono', monospace;
+    color:var(--muted); font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
     font-size:17px; font-weight:600; line-height:1; padding:0;
   }
   .icon-btn:active{ background:var(--panel-3); }
@@ -214,7 +248,7 @@
     background:var(--panel-2); border:1px dashed var(--line-strong); border-radius:10px;
     color:var(--muted); font-family:inherit; font-size:12.5px; padding:9px 12px;
   }
-  .hint-ask b{ color:var(--seek); font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  .hint-ask b{ color:var(--seek); font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-weight:600; }
   /* Stated up front, so taking the help is a choice rather than a surprise. */
   .hint-cost{
     display:block; margin-top:2px; font-size:10.5px; color:var(--miss); opacity:.85;
@@ -235,7 +269,7 @@
      string of digits into something with a shape. */
   .hint-cycle, .hint-formula{
     display:flex; gap:2px; min-width:0; margin-top:7px;
-    font-family:'IBM Plex Mono', monospace; font-size:12px;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:12px;
   }
   .hint-cycle span{
     flex:1; text-align:center; padding:3px 0; border-radius:5px;
@@ -280,7 +314,7 @@
     counter-increment:hstepn; content:counter(hstepn);
     position:absolute; left:0; top:1px; width:15px; height:15px;
     display:flex; align-items:center; justify-content:center;
-    font-family:'IBM Plex Mono', monospace; font-size:9.5px; font-weight:600;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:9.5px; font-weight:600;
     color:#2a1a00; background:var(--seek); border-radius:4px;
   }
   /* Floated so the step's text wraps beside it rather than under it — the fork
@@ -376,7 +410,7 @@
   }
   .seg-btn{
     flex:1; background:transparent; border:none; color:var(--muted);
-    font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:10.5px;
     padding:8px 4px; border-radius:6px; cursor:pointer;
   }
   .seg-btn.active{ background:var(--live); color:#04212a; font-weight:600; }
@@ -395,7 +429,7 @@
 
   .restart-btn{
     background:transparent; border:1px solid var(--line-strong); color:var(--muted);
-    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:11px;
     padding:9px 12px; border-radius:8px; cursor:pointer; letter-spacing:.04em;
   }
   .restart-btn:active{ background:var(--panel-3); }
@@ -418,7 +452,7 @@
   .plaque.current::before{ background:var(--live); }
   .plaque.target::before{ background:var(--seek); }
   .plaque .eyebrow{
-    font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.16em;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:9px; letter-spacing:.16em;
     text-transform:uppercase; color:var(--dim); margin-bottom:3px;
   }
   /* Numeral and roman share one baseline-aligned row, so the tile is a line
@@ -438,7 +472,7 @@
   .plaque .num.wide{ font-size:25px; }
   .plaque .roman{
     grid-column:1; justify-self:end; padding-right:7px;
-    font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:10.5px;
     color:var(--dim); white-space:nowrap;
   }
   .plaque.current .num{ color:var(--live); }
@@ -451,7 +485,7 @@
     flex:0 0 auto; width:74px; cursor:pointer;
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
     background:var(--seek); border:1px solid var(--seek); color:#2a1600;
-    font-family:'IBM Plex Mono', monospace;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
   }
   .plaque-action::before{ display:none; }   /* no accent bar; the whole tile is the accent */
   .plaque-action:active{ background:var(--seek-deep); border-color:var(--seek-deep); }
@@ -500,7 +534,7 @@
      only the gaps between them stay clickable. */
   #notesGroup{ pointer-events:none; }
   .fret-cell{ cursor:pointer; }
-  .note-label{ font-family:'IBM Plex Mono', monospace; pointer-events:none; user-select:none; }
+  .note-label{ font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; pointer-events:none; user-select:none; }
   .note-visible{ transition:r .14s, fill .14s, stroke .14s; }
 
   @keyframes halo{
@@ -539,18 +573,18 @@
   .ta-title{ font-size:13px; color:var(--muted); margin-bottom:6px; }
   .ta-score{ font-size:52px; font-weight:600; color:var(--seek); line-height:1; }
   .ta-best{
-    font-family:'IBM Plex Mono', monospace; font-size:13px; font-weight:600; color:var(--dim);
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:13px; font-weight:600; color:var(--dim);
     margin:6px 0 12px;
   }
   .ta-best.new-best{ color:var(--seek); }
 
   .ta-board-label{
-    font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.12em;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:9px; letter-spacing:.12em;
     text-transform:uppercase; color:var(--dim); margin-bottom:6px;
   }
   .ta-board{
     list-style:none; counter-reset:rank; margin:0 0 8px; padding:0;
-    font-family:'IBM Plex Mono', monospace; font-size:13px;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:13px;
   }
   .ta-board li{
     counter-increment:rank;
@@ -597,7 +631,7 @@
     counter-increment:hstep; content:counter(hstep);
     position:absolute; left:0; top:0; width:22px; height:22px;
     display:flex; align-items:center; justify-content:center;
-    font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:12px; font-weight:600;
     color:#04212a; background:var(--live); border-radius:6px;
   }
   .howto-hint{ font-size:12.5px; color:var(--dim); margin:0 0 16px; line-height:1.5; }
@@ -619,7 +653,7 @@
     padding:10px 12px;
   }
   .howto-map b{
-    display:block; font-family:'IBM Plex Mono', monospace;
+    display:block; font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
     font-size:15px; font-weight:600; letter-spacing:.18em; color:var(--seek);
   }
   .howto-map span{ display:block; font-size:11.5px; line-height:1.45; color:var(--muted); margin-top:4px; }
@@ -669,7 +703,7 @@
   }
   .gate-no:active{ background:var(--panel-3); }
   .gate-foot{ font-size:11.5px; line-height:1.5; color:var(--dim); margin:15px 0 0; }
-  .gate-foot b{ color:var(--muted); font-family:'IBM Plex Mono', monospace; }
+  .gate-foot b{ color:var(--muted); font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; }
 
   /* ---------------- guided tour ---------------- */
   /* Deliberately NOT a modal over a hidden app: the point is that a newcomer
@@ -711,7 +745,7 @@
     box-shadow:0 16px 40px rgba(0,0,0,.55);
   }
   .tour-step{
-    font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.12em;
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:10px; letter-spacing:.12em;
     text-transform:uppercase; color:var(--dim); margin-bottom:6px;
   }
   .tour-title{ font-size:16px; font-weight:600; margin:0 0 6px; }

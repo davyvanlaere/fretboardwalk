@@ -1,0 +1,17 @@
+{
+  "name": "fretboardwalk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Guitar fretboard trainer. The site is a zero-build static bundle — every file in the repo root is directly serveable. This manifest only exists for the optional minified build in tools/; nothing here is needed to run or develop the site.",
+  "scripts": {
+    "build": "node tools/build.js",
+    "serve": "node tests/serve.js",
+    "serve:build": "node tools/serve-build.js",
+    "test": "npm --prefix tests test",
+    "test:build": "node tools/test-build.js",
+    "setup": "npm install && npm --prefix tests install && npm --prefix tests run setup"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}

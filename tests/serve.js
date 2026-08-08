@@ -5,7 +5,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.resolve(__dirname, '..');
+// Serves the repo root by default. SERVE_ROOT points it somewhere else so the
+// same suite can be run against build/ — see `npm run test:build` at the root.
+const ROOT = path.resolve(process.env.SERVE_ROOT || path.join(__dirname, '..'));
 const PORT = process.env.PORT || 8413;
 
 const TYPES = {

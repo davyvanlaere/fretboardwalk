@@ -3,3 +3,6 @@
 node_modules/
 tests/test-results/
 tests/playwright-report/
+
+# Build output — regenerate with `npm run build`, never edit or commit.
+build/

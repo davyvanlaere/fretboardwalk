@@ -8,6 +8,11 @@ zero-build static bundle and the whole repo is the deployed artifact. A
 `package.json` at the top level risks a static host deciding the project needs
 building.
 
+> **Note.** There *is* now a root `package.json`, added for the optional
+> minified build in `tools/`. It changes nothing about how the site runs, but it
+> does re-open the risk above — see [tools/README.md](../tools/README.md) for
+> what to check on the host before relying on it.
+
 ## Running
 
 ```sh
@@ -30,6 +35,20 @@ Useful variants:
 
 A static server on port 8413 is started automatically (`serve.js`) and reused if
 one is already up.
+
+### Running against the minified build
+
+`serve.js` honours `SERVE_ROOT`, so the same specs can be pointed at `build/`
+instead of the source:
+
+```sh
+npm run build       # from the repo root
+npm run test:build  # same 136 tests, minified bundle, port 8414
+```
+
+The separate port matters. The suite reuses an already-running server when it
+finds one, so on the usual port a stray dev server would quietly serve the
+unminified source and the build would "pass" without being tested at all.
 
 ## Why two projects
 
@@ -73,6 +92,46 @@ before drawing anything it converts every position to a real pitch and asserts
 the degree label is correct, and that the shape's degrees match the chord name
 in the caption. A mislabelled diagram fails the build instead of teaching
 someone the wrong thing.
+
+## `genog.js`
+
+Also not a test. It renders the per-page social cards into `res/`:
+
+```sh
+node tests/genog.js              # all of them
+node tests/genog.js minor        # only slugs containing "minor"
+```
+
+Every content page has its own `og:image` rather than sharing one generic
+cover, because the card is what decides whether a link posted to a forum gets
+clicked. Editing a card means editing its entry in `CARDS` and re-running.
+
+Same rule as above applies to the artwork: any card drawn on a neck declares
+its key and starting fret, and every note label is checked against the real
+pitch before the PNG is written. Cards are the most-seen and least-reviewed
+images on the site, so they are the last place a wrong note should be able to
+hide.
+
+## `gencharts.js`
+
+Renders the standalone reference charts in `res/` — the saveable cheat sheets
+embedded near the bottom of `/chords-from-degrees` and `/major-minor-degree-map`.
+
+```sh
+node tests/gencharts.js
+```
+
+These are raster on purpose. Inline SVG cannot be indexed by image search —
+only a fetchable `<img>` can — so these exist as real PNGs with descriptive
+filenames, alt text, `ImageObject` markup and an entry in the image sitemap.
+
+The artwork is **not** redrawn here. Each chart lifts the already-published
+`<svg>` straight out of the page it belongs to, matched by `aria-label`, so a
+chart can never drift out of step with the article around it, and the pitch
+verification in `genchords.js` covers both. A missing SVG fails the build
+rather than silently shipping a stale copy.
+
+If you change a chord diagram: re-run `genchords.js` first, then `gencharts.js`.
 
 ## Writing more
 

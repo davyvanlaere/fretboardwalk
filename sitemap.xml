@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://www.fretboardwalk.com/</loc>
     <lastmod>2026-08-03</lastmod>
@@ -41,12 +42,18 @@
     <lastmod>2026-08-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
+    <image:image>
+      <image:loc>https://www.fretboardwalk.com/res/guitar-scale-degree-chart-major-minor.png</image:loc>
+    </image:image>
   </url>
   <url>
     <loc>https://www.fretboardwalk.com/chords-from-degrees</loc>
     <lastmod>2026-08-08</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
+    <image:image>
+      <image:loc>https://www.fretboardwalk.com/res/a-shape-barre-chord-scale-degrees.png</image:loc>
+    </image:image>
   </url>
   <url>
     <loc>https://www.fretboardwalk.com/about</loc>
