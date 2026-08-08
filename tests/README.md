@@ -55,6 +55,25 @@ these specs are about.
 | `settings.spec.js` | Persistence round-trips, and that hand-edited or corrupt storage can't break startup |
 | `timeattack.spec.js` | Run chrome, the per-display-mode score buckets, leaderboard cleanup, and restoring the practice run underneath |
 
+## `genchords.js`
+
+Not a test — a generator. It draws the chord boxes on `/chords-from-degrees`
+and splices them into the page:
+
+```sh
+node tests/genchords.js chords-from-degrees.html
+```
+
+It lives here because `tests/` is the one folder that isn't part of the
+deployed site. Run it after editing a shape; it is idempotent, finding diagrams
+it wrote previously by their `aria-label`.
+
+The reason it exists rather than hand-drawn SVG is the check in the middle:
+before drawing anything it converts every position to a real pitch and asserts
+the degree label is correct, and that the shape's degrees match the chord name
+in the caption. A mislabelled diagram fails the build instead of teaching
+someone the wrong thing.
+
 ## Writing more
 
 Use `helpers.js` rather than driving the board directly. The one thing worth
