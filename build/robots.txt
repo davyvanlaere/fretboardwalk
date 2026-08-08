@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /tests/
-
-Sitemap: https://www.fretboardwalk.com/sitemap.xml

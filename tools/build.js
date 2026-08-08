@@ -31,6 +31,7 @@ const OUT = path.join(ROOT, 'build');
 const SKIP = new Set([
   'build', 'tools', 'tests', 'node_modules', '.git', '.claude',
   '.gitignore', 'package.json', 'package-lock.json',
+  'amplify.yml',         // host build config, not site content
   'index_old.html',      // superseded, not linked from anywhere
   'icon-preview.svg',    // working file for the favicon, not referenced
 ]);

@@ -3,3 +3,7 @@
 node_modules/
 tests/test-results/
 tests/playwright-report/
+
+# Build output — regenerate with `npm run build`. Amplify builds it on deploy
+# (see amplify.yml); committing it duplicated res/ and risked shipping stale files.
+build/

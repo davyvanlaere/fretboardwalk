@@ -1,0 +1,35 @@
+# Amplify Hosting build spec.
+#
+# This file overrides whatever is saved in the Amplify console — the settings
+# live here, in version control, rather than in a web form nobody can diff.
+#
+# The site is a zero-build static bundle: every file in the repo root is
+# directly serveable, and that is still true. This deploys the minified copy
+# instead, produced by `npm run build` (see tools/README.md). Nothing here is
+# needed to run or develop the site locally.
+#
+# build/ is deliberately NOT committed. Committing it duplicated res/ — 21MB of
+# images and audio — and, worse, let a forgotten `npm run build` deploy a stale
+# site with no error anywhere. Building here means the artifact always matches
+# the source it was built from.
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        # Installs esbuild only. tests/ has its own package.json and is not a
+        # workspace, so Playwright is not pulled into the deploy.
+        - npm ci
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    # Relative to the repo root. A leading slash means "repo root" to Amplify,
+    # so a subdirectory must be written bare — `/build/` is read as an absolute
+    # container path and silently does not resolve.
+    baseDirectory: build
+    files:
+      - "**/*"
+  cache:
+    paths:
+      - node_modules/**/*
