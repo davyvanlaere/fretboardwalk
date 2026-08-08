@@ -1032,19 +1032,13 @@
   // there is no "next one along" and the reach can't be explained until you've
   // stepped onto a natural degree.
   //
-  // Which of four shapes a route takes decides its legs, its wording and its
-  // diagram together, so it's decided once here rather than re-derived from a
-  // handful of booleans at three different call sites.
-  //
-  //   sameString   just slide; the target is closest where you already are
-  //   edgeCase     the reach lands in the sequence's one hole; the hole is the
-  //                lesson, so stay level and slide out of it
-  //   reachSlide   the common case: reach to the sequence's degree wherever the
-  //                neck has put it, then slide
-  //   bare         a reach the sequence can't account for — true, but it only
-  //                says "it's over there", so it's priced accordingly
+  // Candidate routes are BUILT first and costed afterwards. Costing a
+  // destination and then deciding how to reach it is what produced routes that
+  // went two frets up and two frets back to land where they'd started: the
+  // detour happened after the price was set, so nothing ever saw it. Building
+  // first means the price is always the price of the actual advice.
   const ROUTE_MAX_SPAN = 3;
-  // Priced by what the route costs to WORK OUT, not by how far the hand moves.
+  // Priced by what a route costs to WORK OUT, not by how far the hand moves.
   // Those pull opposite ways: crossing a string is physically free but is
   // another step along the sequence to compute, while a slide is one interval
   // lookup whether it's one fret or three.
@@ -1053,33 +1047,11 @@
   // A same-string route is a true answer but teaches nothing about how the neck
   // is laid out, so it has to be clearly better to win.
   const ROUTE_SAME_STRING_COST = 1.5;
-  // Nor should a reach the sequence can't explain be free: from a ♭7, "two
-  // strings thinner is the 5" is a bare positional fact. Paying a fret to step
-  // onto the sequence first buys an explanation, and that's the point.
+  // Nor should a reach the sequence can't account for be free: from a 4, "two
+  // strings thinner is the 2" is a bare coincidence that holds here and almost
+  // nowhere else. Paying a fret or two for a route the sequence explains is
+  // usually the better trade — which is the whole reason the hint exists.
   const ROUTE_UNEXPLAINED_COST = 2;
-
-  // Which string to land on, and where. Knows nothing about the sequence — this
-  // is purely "what is the cheapest place to end up from here".
-  function chooseDestination(s, f, target){
-    let best = null;
-    for(let ns = 0; ns <= 5; ns++){
-      const span = Math.abs(ns - s);
-      if(span > ROUTE_MAX_SPAN) continue;
-      const offs = offsetsTo(ns, f, target);
-      if(!offs.length) continue;
-      const cost = Math.abs(offs[0]) * ROUTE_FRET_COST + span * ROUTE_SPAN_COST +
-                   (span === 0 ? ROUTE_SAME_STRING_COST : 0);
-      // Ties go to the shorter reach, then to the thinner string — the
-      // direction a hand usually travels.
-      if(!best || cost < best.cost ||
-         (cost === best.cost && span < best.span) ||
-         (cost === best.cost && span === best.span && ns > best.ns)){
-        best = {ns, span, cost, fret:f + offs[0],
-                dir: ns === s ? 0 : (ns > s ? 1 : -1), sameString: ns === s};
-      }
-    }
-    return best;
-  }
 
   // The two degrees a fret sits between when the major scale has nothing there.
   // Measured against the major scale alone on purpose: the sequence is a
@@ -1108,30 +1080,26 @@
     return origins;
   }
 
-  function computeHintRoute(){
-    if(!layout) return null;
-    const s = state.current.string, f = state.current.fret;
-    const target = state.targetDegree;
-    const curDeg = degreeAt(s, f);
-
-    let pick = null;
-    for(const o of reachOrigins(s, f, curDeg)){
-      const d = chooseDestination(s, o.fret, target);
-      if(!d) continue;
-      const unexplained = !d.sameString && CYCLE.indexOf(o.deg) < 0;
-      const cost = d.cost + Math.abs(o.lead) * ROUTE_FRET_COST +
-                   (unexplained ? ROUTE_UNEXPLAINED_COST : 0);
-      if(!pick || cost < pick.cost) pick = {o, d, cost};
-    }
-    if(!pick) return null;
-    return planRoute(s, f, curDeg, target, pick.o, pick.d);
+  // What the route actually asks of you: every fret it moves through, plus the
+  // strings crossed, plus a surcharge when the sequence can't account for where
+  // the reach landed.
+  function routeCost(p){
+    const frets = Math.abs(p.lead) + Math.abs(p.gapShift) + Math.abs(p.slide);
+    return frets * ROUTE_FRET_COST +
+           p.span * ROUTE_SPAN_COST +
+           (p.span === 0 ? ROUTE_SAME_STRING_COST : 0) +
+           (p.explained ? 0 : ROUTE_UNEXPLAINED_COST);
   }
+  const routeLegs = (p) =>
+    (p.lead !== 0 ? 1 : 0) + (p.span !== 0 ? 1 : 0) + (p.slide !== 0 ? 1 : 0);
 
-  // Turns a chosen origin and destination into a complete route. Every branch
-  // returns a finished object, so no field is ever assigned twice.
-  function planRoute(s, f, curDeg, target, o, d){
+  // Every way of getting from one origin to one destination. Usually two: reach
+  // level, or reach to the sequence's own degree wherever the neck has put it.
+  // Both are offered so the cost decides, rather than one being hardcoded as
+  // the rule and the other never considered.
+  function plansFor(s, f, curDeg, target, o, d){
     const base = {
-      kind:null, from:{string:s, fret:f}, step:{string:s, fret:o.fret},
+      from:{string:s, fret:f}, step:{string:s, fret:o.fret},
       dest:{string:d.ns, fret:d.fret}, lead:o.lead, stepDeg:o.deg,
       ns:d.ns, span:d.span, dir:d.dir, destFret:d.fret, curDeg, target,
       gbGap: !d.sameString && Math.min(s, d.ns) <= 3 && Math.max(s, d.ns) >= 4,
@@ -1139,8 +1107,8 @@
     };
 
     if(d.sameString){
-      return Object.assign(base, {kind:'sameString',
-        mid:{string:s, fret:o.fret}, landed:o.deg, slide:d.fret - o.fret});
+      return [Object.assign({}, base, {kind:'sameString', explained:true,
+        mid:{string:s, fret:o.fret}, landed:o.deg, slide:d.fret - o.fret})];
     }
 
     const iFrom = CYCLE.indexOf(o.deg);
@@ -1149,34 +1117,73 @@
       (d.dir === 1 ? iFrom + d.span >= CYCLE.length : iFrom - d.span < 0);
     const between = gapBetween(d.ns, o.fret);
     const pair = d.dir === 1 ? ['6','7'] : ['4','5'];
+    const out = [];
 
-    // The edge case worth memorising: one step across the 4-to-7 join, landing
-    // in the pair that always sits there. A longer reach can cross the same
-    // join but carries the error onward and lands somewhere else entirely — a 7
-    // reaching two strings heavier ends up between the 1 and the 2, which is
-    // true but teaches nothing. Checking the landed pair rather than the step
-    // count also catches a G→B crossing shifting things again.
+    // Reaching level. When that lands in the sequence's one hole it's the edge
+    // case worth memorising; otherwise it's only explained if the sequence
+    // predicted what's there.
+    const levelDeg = degreeAt(d.ns, o.fret);
     if(tritone && between && between[0] === pair[0] && between[1] === pair[1]){
-      return Object.assign(base, {kind:'edgeCase',
-        mid:{string:d.ns, fret:o.fret}, landed:degreeAt(d.ns, o.fret),
-        slide:d.fret - o.fret, cycDeg, tritone, between});
+      out.push(Object.assign({}, base, {kind:'edgeCase', explained:true,
+        mid:{string:d.ns, fret:o.fret}, landed:levelDeg,
+        slide:d.fret - o.fret, cycDeg, tritone, between}));
+    } else {
+      out.push(Object.assign({}, base, {kind: cycDeg ? 'reachSlide' : 'bare',
+        explained: !!cycDeg && levelDeg === cycDeg,
+        mid:{string:d.ns, fret:o.fret}, landed:levelDeg,
+        slide:d.fret - o.fret, cycDeg,
+        onCycle: !!cycDeg && levelDeg === cycDeg, tritone, between}));
     }
 
-    // Reach to the sequence's degree wherever the neck has put it. Crossing G→B
-    // doesn't break the sequence, it just displaces it a fret; describing what
-    // happens to sit level instead teaches a coincidence that only holds on
-    // that one string pair.
-    let midFret = o.fret;
+    // Reaching to the sequence's degree instead, when a seam has displaced it.
+    // Crossing G→B doesn't break the sequence, it just moves it a fret.
     if(cycDeg){
       const off = offsetsTo(d.ns, o.fret, cycDeg);
       // More than a couple of frets isn't a seam, it's the neck running out.
-      if(off.length && Math.abs(off[0]) <= 2) midFret = o.fret + off[0];
+      if(off.length && off[0] !== 0 && Math.abs(off[0]) <= 2){
+        const midFret = o.fret + off[0];
+        out.push(Object.assign({}, base, {kind:'reachSlide', explained:true,
+          mid:{string:d.ns, fret:midFret}, landed:cycDeg,
+          slide:d.fret - midFret, gapShift:off[0],
+          cycDeg, onCycle:true, tritone, between}));
+      }
     }
-    const landed = midFret === o.fret ? degreeAt(d.ns, o.fret) : cycDeg;
-    return Object.assign(base, {kind: cycDeg ? 'reachSlide' : 'bare',
-      mid:{string:d.ns, fret:midFret}, landed,
-      slide:d.fret - midFret, gapShift:midFret - o.fret,
-      cycDeg, onCycle: !!cycDeg && landed === cycDeg, tritone, between});
+    return out;
+  }
+
+  function computeHintRoute(){
+    if(!layout) return null;
+    const s = state.current.string, f = state.current.fret;
+    const target = state.targetDegree;
+    const curDeg = degreeAt(s, f);
+
+    const plans = [];
+    for(const o of reachOrigins(s, f, curDeg)){
+      for(let ns = 0; ns <= 5; ns++){
+        const span = Math.abs(ns - s);
+        if(span > ROUTE_MAX_SPAN) continue;
+        const offs = offsetsTo(ns, o.fret, target);
+        if(!offs.length) continue;
+        const d = {ns, span, dir: ns === s ? 0 : (ns > s ? 1 : -1),
+                   fret: o.fret + offs[0], sameString: ns === s};
+        for(const p of plansFor(s, f, curDeg, target, o, d)){
+          p.cost = routeCost(p);
+          p.legs = routeLegs(p);
+          plans.push(p);
+        }
+      }
+    }
+    if(!plans.length) return null;
+
+    // Cheapest wins. Then the one the sequence explains, because at equal
+    // effort that's the one worth showing. Then fewer legs, then the shorter
+    // reach, then the thinner string — the direction a hand usually travels.
+    plans.sort((a, b) =>
+      a.cost - b.cost ||
+      (b.explained ? 1 : 0) - (a.explained ? 1 : 0) ||
+      (b.kind === 'edgeCase' ? 1 : 0) - (a.kind === 'edgeCase' ? 1 : 0) ||
+      a.legs - b.legs || a.span - b.span || b.ns - a.ns);
+    return plans[0];
   }
 
   function fretWord(n){

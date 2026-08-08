@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /tests/
 
-Sitemap: https://fretboardwalk.com/sitemap.xml
+Sitemap: https://www.fretboardwalk.com/sitemap.xml

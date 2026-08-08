@@ -125,20 +125,24 @@ async function tapDegree(page, degree, opts = {}) {
   // clickable — so a note directly behind those genuinely can't be tapped until
   // it's dismissed. That's the app behaving correctly, not a bug to route
   // around, but a test aiming blind will hang on it.
+  //
+  // The overlap has to be measured AFTER scrolling the candidate into view.
+  // Checking first and scrolling second reads coordinates from before the neck
+  // moved, and the scroll can slide the very cell it picked in under the toast
+  // — which is exactly how this hung for minutes before failing.
   if (opts.avoid) {
-    const free = await cells.evaluateAll((els, sel) => {
-      const o = document.querySelector(sel);
-      if (!o) return els.map((_, i) => i);
-      const b = o.getBoundingClientRect();
-      return els.reduce((acc, e, i) => {
-        const r = e.getBoundingClientRect();
-        const overlaps = !(r.right < b.left || r.left > b.right ||
-                           r.bottom < b.top || r.top > b.bottom);
-        if (!overlaps) acc.push(i);
-        return acc;
-      }, []);
-    }, opts.avoid);
-    if (free.length) index = free[Math.floor(free.length / 2)];
+    for (let i = 0; i < n; i++) {
+      const cand = cells.nth(i);
+      await cand.scrollIntoViewIfNeeded();
+      const clear = await cand.evaluate((el, sel) => {
+        const o = document.querySelector(sel);
+        if (!o || o.hidden) return true;
+        const r = el.getBoundingClientRect(), b = o.getBoundingClientRect();
+        return r.right < b.left || r.left > b.right ||
+               r.bottom < b.top || r.top > b.bottom;
+      }, opts.avoid);
+      if (clear) { index = i; break; }
+    }
   }
 
   if (opts.onString !== undefined) {
