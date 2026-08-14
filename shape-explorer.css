@@ -1,0 +1,117 @@
+/* Chrome around the board — key select, degree chips, presets. The board
+   itself (fretboard-wrap, neck-scroll, svg#board, note/cell classes and the
+   --neck/--string/--live tokens) comes from style.css; this file only adds
+   what that stylesheet doesn't have a page like this in mind for. */
+
+/* style.css centers .app both axes via body{align-items:center}. That trap
+   hides overflowing content above the fold on short viewports in some
+   browsers (centered flex content can't always be scrolled up to reach the
+   part above the top edge). This page can run taller than one screen, so
+   pin the cross-axis to the start instead — still centered horizontally. */
+body{
+  align-items:flex-start;
+  display:block;
+  padding:16px 16px 24px;
+}
+
+.explorer{
+  max-width:620px;
+  margin:0 auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.ex-head{ display:flex; align-items:center; gap:10px; }
+.ex-brand{ display:flex; align-items:center; gap:9px; text-decoration:none; color:var(--text); }
+.ex-logo{
+  width:28px; height:28px; flex:0 0 auto; border-radius:8px;
+  background:linear-gradient(145deg, var(--live), var(--live-deep));
+  display:flex; align-items:center; justify-content:center; color:#04212a;
+}
+.ex-logo svg{ width:20px; height:20px; display:block; }
+.ex-brand b{ font-size:16px; font-weight:600; letter-spacing:-.01em; }
+.ex-badge{
+  font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:11px;
+  font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--seek); border:1px solid rgba(251,191,36,.35); background:rgba(251,191,36,.08);
+  padding:4px 9px; border-radius:999px;
+}
+
+.ex-controls{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.ex-key{
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:11.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em;
+}
+.ex-key select{
+  appearance:none; -webkit-appearance:none;
+  background:var(--panel-3); border:1px solid var(--line-strong);
+  color:var(--text); font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  font-size:13px; font-weight:500; padding:8px 12px; border-radius:9px;
+  cursor:pointer; text-transform:none; letter-spacing:0;
+}
+.ex-sound{
+  width:36px; height:36px; flex:0 0 auto; border-radius:9px; cursor:pointer;
+  background:var(--panel-3); border:1px solid var(--line-strong); color:var(--text);
+  display:flex; align-items:center; justify-content:center;
+}
+.ex-sound svg{ width:18px; height:18px; }
+.ex-sound[aria-pressed="false"]{ color:var(--dim); }
+.ex-sound[aria-pressed="false"] .ex-wave{ display:none; }
+
+/* Degree chips: same visual language as the board's own note chips — a plain
+   panel-3 pill normally, cyan when active and on '1' so the root always reads
+   the same colour on the chips as it does on the neck. */
+.ex-chips{ display:flex; flex-wrap:wrap; gap:7px; }
+.ex-chip{
+  min-width:40px; padding:8px 6px; border-radius:9px; cursor:pointer;
+  background:var(--panel-3); border:1px solid var(--line-strong); color:var(--muted);
+  font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:13px; font-weight:600;
+  text-align:center; transition:background .12s, border-color .12s, color .12s;
+}
+.ex-chip:hover{ border-color:var(--line-strong); color:var(--text); }
+.ex-chip.on{ background:var(--panel-2); border-color:var(--muted); color:var(--text); }
+.ex-chip.root{ color:var(--live); border-color:rgba(34,211,238,.35); }
+.ex-chip.root.on{ background:var(--live); border-color:var(--live); color:#04212a; }
+
+.ex-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.ex-showing{
+  display:flex; align-items:center; gap:8px; min-width:0;
+  font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:12.5px; color:var(--dim);
+}
+.ex-showing span:first-child{ text-transform:uppercase; letter-spacing:.07em; font-size:10.5px; flex:0 0 auto; }
+.ex-showing-list{ color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ex-clear{
+  flex:0 0 auto; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;
+  background:transparent; border:1px solid var(--line-strong); color:var(--muted);
+  padding:6px 12px; border-radius:8px;
+}
+.ex-clear:hover{ color:var(--text); border-color:var(--muted); }
+
+.ex-presets{ display:flex; flex-wrap:wrap; gap:7px; }
+.ex-preset{
+  font-family:inherit; font-size:12.5px; font-weight:500; cursor:pointer;
+  background:var(--panel); border:1px solid var(--line); color:var(--muted);
+  padding:7px 12px; border-radius:999px;
+}
+.ex-preset:hover{ color:var(--text); border-color:var(--line-strong); }
+.ex-preset.on{ color:var(--live); border-color:rgba(34,211,238,.4); background:rgba(34,211,238,.08); }
+
+/* The board needs a definite height for computeLayout to measure (horizontal
+   mode reads the scroller's clientHeight; vertical mode needs a bounded box
+   to scroll a tall neck inside). style.css's own .board-area assumes it's
+   flexed inside the game shell's fixed-height .app, which this page doesn't
+   have, so it gets an explicit height here instead. */
+.board-area{
+  height:min(58vh, 600px); min-height:320px;
+  border:1px solid var(--line); border-radius:16px; background:var(--panel);
+  padding:8px; margin-top:2px;
+}
+
+@media (max-width:520px){
+  .ex-head{ margin-bottom:2px; }
+  .ex-badge{ font-size:10px; padding:3px 7px; }
+  .ex-chip{ min-width:34px; padding:6px 4px; font-size:12px; }
+  .ex-preset{ padding:5px 10px; font-size:11.5px; }
+  .board-area{ height:max(60vh, 400px); min-height:340px; padding:6px; }
+}
