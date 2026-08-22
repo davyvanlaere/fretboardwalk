@@ -82,9 +82,17 @@ function streak(page) {
 // Finds a tappable cell for `degree`, avoiding the bands where the header,
 // plaques and any bottom-anchored card sit — a click that lands on an overlay
 // silently does nothing and reads as a game-logic failure.
+//
+// The tour card is measured rather than guessed at. Its height depends on how
+// much copy the current step carries, so a fixed safeBottom that clears it on
+// one step quietly stops clearing it on the next — which surfaces as a tap the
+// board never received, three assertions away from the cause.
 async function findCell(page, degree, { safeBottom = 200 } = {}) {
   return page.evaluate(({ deg, safeBottom }) => {
     const board = document.getElementById('neckScroll').getBoundingClientRect();
+    const tour = document.getElementById('tour');
+    const card = tour && tour.classList.contains('open')
+      ? document.getElementById('tourCard').getBoundingClientRect() : null;
     const cells = [];
     for (const c of document.querySelectorAll('.fret-cell')) {
       if (c.dataset.degree !== deg) continue;
@@ -93,6 +101,8 @@ async function findCell(page, degree, { safeBottom = 200 } = {}) {
       if (r.top < Math.max(board.top, 0) + 10) continue;
       if (r.bottom > innerHeight - safeBottom) continue;
       if (r.right > innerWidth - 5 || r.left < 5) continue;
+      if (card && r.bottom > card.top - 4 && r.top < card.bottom + 4
+               && r.right > card.left - 4 && r.left < card.right + 4) continue;
       cells.push({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
     }
     // Middle of the pack: least likely to be clipped by a scroll settling.
@@ -280,6 +290,18 @@ async function holeFramesAny(page, selector) {
     hole.width >= t.width - 1 && hole.height >= t.height - 1);
 }
 
+// Weaker than holeFrames, and deliberately: a step whose subject is two
+// elements spotlights both at once, so the hole is bigger than either and
+// centred on neither. All that can be asserted is that it covers the thing.
+async function holeCovers(page, selector) {
+  const hole = await holeRect(page);
+  const t = await rectOf(page, selector);
+  if (!t) return false;
+  return hole.left <= t.left + 2 && hole.top <= t.top + 2
+      && hole.left + hole.width >= t.left + t.width - 2
+      && hole.top + hole.height >= t.top + t.height - 2;
+}
+
 const isWide = (page) => page.viewportSize().width >= 1000;
 
 module.exports = {
@@ -287,5 +309,5 @@ module.exports = {
   readStorage, readJSON,
   currentTarget, streak, findCell, tapDegree, tapWrong, playCorrect, settle,
   playUntilTargetIn,
-  rectOf, holeRect, holeFrames, holeFramesAny, isWide,
+  rectOf, holeRect, holeFrames, holeFramesAny, holeCovers, isWide,
 };

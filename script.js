@@ -693,6 +693,36 @@
     }
   }
 
+  // Same thing, but centred in the part of the neck the tour card isn't sitting
+  // on. The card is bottom-anchored over the board, so a step that pointed at
+  // something with plain centerOn was liable to spotlight a note behind its own
+  // explanation — which reads as the app dimming the screen for no reason.
+  // Only the vertical board can solve it by scrolling: on a horizontal one the
+  // whole neck is already on screen and placeTourCard() moves the card instead.
+  // `f2` centres a run of frets on its middle rather than on one end, which for
+  // a three-fret stretch is the difference between all of it being on screen
+  // and the last note of it sitting under the card.
+  function centerOnClear(s, f, f2){
+    // A fret that isn't one leaves the target NaN, which Chromium scrolls to as
+    // if it were 0 — the neck silently jumps to the nut and the step spotlights
+    // the wrong end of the board. Better to leave it where it is.
+    if(!layout || !Number.isFinite(layout.xCenter[f])) return;
+    const pos = Number.isFinite(layout.xCenter[f2])
+      ? (layout.xCenter[f] + layout.xCenter[f2]) / 2
+      : layout.xCenter[f];
+    const scroller = neckScrollEl;
+    if(layout.orientation !== 'vertical'){
+      scroller.scrollTo({left: Math.max(0, pos - scroller.clientWidth/2), behavior:'smooth'});
+      return;
+    }
+    const top = scroller.getBoundingClientRect().top;
+    const cardTop = tourCardEl.getBoundingClientRect().top;
+    // Floored, so a short window or a card taller than the board still scrolls
+    // somewhere sane instead of pinning everything to the nut.
+    const clear = Math.max(140, Math.min(scroller.clientHeight, cardTop - top));
+    scroller.scrollTo({top: Math.max(0, pos - clear/2), behavior:'smooth'});
+  }
+
   // Shared by practice's streak and time attack's score, which repaint the
   // same header box but never both at once (mode is exclusive). The heat tier
   // is derived purely from the count, so dropping to 0 (a broken streak) also
@@ -1320,11 +1350,17 @@
   // cycle strip gives the string-crossing move, for the fret-sliding one.
   function formulaStripHtml(r){
     if(r.slide === 0) return '';
-    const a = NATURALS.indexOf(r.landed);
-    const b = NATURALS.indexOf(r.target);
+    return formulaRowHtml(r.landed, r.target, r.slide > 0);
+  }
+
+  // The drawing itself, taking two degrees rather than a route, so the tour can
+  // light up a stretch it has drawn on the board with no route behind it — the
+  // same picture a hint will show later rather than a second dialect of it.
+  function formulaRowHtml(fromDeg, toDeg, up){
+    const a = NATURALS.indexOf(fromDeg);
+    const b = NATURALS.indexOf(toDeg);
     if(a < 0 || b < 0) return '';
 
-    const up = r.slide > 0;
     const steps = up ? (b - a + 7) % 7 : (a - b + 7) % 7;
     const litGap = new Set(), viaDeg = new Set();
     for(let n = 0; n < steps; n++){
@@ -1653,7 +1689,82 @@
   // `restore` holds the display settings the tour overrode, so replaying it from
   // the ? button doesn't quietly cost someone the Hidden mode they'd worked up
   // to. Null whenever no tour is running.
-  let tour = {active:false, i:0, awaitingTap:false, restore:null};
+  let tour = {active:false, i:0, awaitingTap:false, restore:null, run:null, cyc:null};
+
+  // The sequence strip the hint panel draws, built from a bare map of
+  // degree -> class instead of from a computed route — so the tour can show it
+  // before there is any route to explain, in exactly the styling it will keep
+  // meeting later. Same markup, same CSS: a first-visit picture that turns into
+  // a familiar one rather than a second dialect of the same idea.
+  function cycleRowHtml(marks){
+    const cells = CYCLE.map((d, i)=>{
+      const cls = [];
+      if(marks[d]) cls.push(marks[d]);
+      // Written cut at its odd join, so the 4 and the 7 at either end are the
+      // two sides of one seam rather than two separate things to memorise.
+      if(i === 0 || i === CYCLE.length - 1) cls.push('seam');
+      return `<span class="${cls.join(' ')}">${d}</span>`;
+    }).join('');
+    return `<div class="hint-cycle">${cells}</div>`;
+  }
+
+  // Three notes on one string that catch the scale changing its stride: a whole
+  // step and then a half, side by side. Both runs the board can show are of that
+  // shape — 2 3 4 and 6 7 1 — which are also, not by coincidence, the only two
+  // places the major scale has a half step in it.
+  const SCALE_RUNS = [['2','3','4'], ['6','7','1']];
+  function scaleRun(){
+    const out = [];
+    for(const degrees of SCALE_RUNS){
+      for(let s=0; s<6; s++){
+        // f+3 is the last note of the run, so it has to be a real fret; and the
+        // run starts off the nut so the first note has a fret wire either side.
+        for(let f=1; f+3<=FRET_COUNT; f++){
+          if(majorDegreeAt(s, f) === degrees[0]) out.push({s, f, degrees});
+        }
+      }
+    }
+    // Mid-neck for the same reason as the two steps after it (see cycleColumn):
+    // the board scrolls only as far as its own end.
+    out.sort((a, b)=> Math.abs(a.f - 5) - Math.abs(b.f - 5) || a.s - b.s);
+    return out[0] || null;
+  }
+
+  // One fret read across all six strings: the sequence's own order, in the
+  // loaded key, on the board.
+  //
+  // Five of the six string pairs are tuned a fourth apart, so the same fret
+  // gives the next place along. G to B is a major third — a semitone closer —
+  // so from the B string up, the run steps a fret higher. That kink is drawn
+  // rather than described: it is the single thing that trips people crossing
+  // strings, and a demonstration that quietly avoided it would be teaching a
+  // rule the neck doesn't keep.
+  //
+  // Six strings is five crossings, and none of them may set off from the 4 —
+  // that one join is a tritone rather than a fourth and lands outside the key
+  // altogether, which is a different lesson for a different day.
+  function cycleColumn(){
+    const found = [];
+    for(let f=0; f+1<=FRET_COUNT; f++){
+      const i = CYCLE.indexOf(majorDegreeAt(0, f));
+      if(i < 0 || i + 5 >= CYCLE.length) continue;
+      const degrees = CYCLE.slice(i, i + 6);
+      // Built from the tuning rule, then checked against the board's own pitch
+      // maths rather than trusted. A column that doesn't actually read this way
+      // is dropped, so the step can never point at six notes and name them wrong.
+      const cells = degrees.map((deg, sIdx)=> ({s:sIdx, f: sIdx >= 4 ? f + 1 : f, deg}));
+      if(cells.every(c => majorDegreeAt(c.s, c.f) === c.deg)) found.push({fret:f, cells, degrees});
+    }
+    // Low on the neck, and not merely a preference. The board stops scrolling
+    // at its own end, so anything past about the 6th fret can never be lifted
+    // clear of the tour card on a phone however hard centerOnClear tries —
+    // hence a hard cutoff rather than a distance from the middle. Only one of
+    // the twelve keys is left with the open strings, and a column read off the
+    // open strings is no worse a demonstration than any other.
+    const cost = (f)=> f <= 6 ? Math.abs(f - 3) : 50 + f;
+    found.sort((a, b)=> cost(a.fret) - cost(b.fret));
+    return found[0] || null;
+  }
 
   // {key} is filled from the live key so the copy never claims C major to
   // someone who arrived on a link with another key saved.
@@ -1670,6 +1781,10 @@
       title:"You're standing on a 1",
       body:'This one is your position. Notice the other 1s lit up too — one scale step turns up in a dozen places on a neck, which is exactly why these are worth learning as numbers.',
       target:()=> currentNoteNode(), pad:16, radius:'50%',
+      // Root position sits low on the neck, which on a phone is exactly where
+      // the card is — without this the step spotlights a note behind its own
+      // explanation.
+      focus:()=> ({s:state.current.string, f:state.current.fret}),
     },
     {
       title:'Find is the one to go to next',
@@ -1682,9 +1797,120 @@
       target:()=> fretboardWrapEl, pad:4, awaitTap:true,
     },
     {
-      title:"That's the whole game",
-      body:'You just played the real 5 of {key}. Keep finding the number it asks for and the streak climbs — Time Attack puts a clock on it once you want one.',
-      target:()=> streakBoxEl, pad:7,
+      // Half of the technique: how far to slide once you're on the right string.
+      // The other half — how to get to the right string — is the step after
+      // this one, and neither is much use without the other. This one first
+      // because it is only the scale they met in step 1, seen sideways: the
+      // sequence is a new idea, this is a fact about something they already
+      // have.
+      title:'Along a string, it’s just the scale',
+      body(){
+        const d = tour.run ? tour.run.degrees : SCALE_RUNS[0];
+        return `<p>Walk up one string and you're walking the scale — which isn't evenly spaced. Every step is <b>two frets</b> except two of them. Here <b>${d[0]}</b> to <b>${d[1]}</b> is two frets, and <b>${d[1]}</b> to <b>${d[2]}</b> is one.</p>`
+          + formulaRowHtml(d[0], d[2], true)
+          + `<p>Only <b>3 to 4</b> and <b>7 to 1</b> are short, in every key — that's the whole major-scale formula. It's what tells your hand how far to slide, once you're on the string you want.</p>`;
+      },
+      target:()=> tour.run ? boardSpanNode(runCells()) : fretboardWrapEl,
+      pad:10,
+      // Centred on the middle of the run: a three-fret stretch centred on
+      // either end puts the other end under the card.
+      focus:()=> tour.run ? {s:tour.run.s, f:tour.run.f, f2:tour.run.f + 3} : null,
+      enter(){
+        tour.run = scaleRun();
+        if(!tour.run) return;
+        state.current = {string:tour.run.s, fret:tour.run.f};
+        state.prevDegree = null;
+        state.prevDegree2 = null;
+        state.targetDegree = tour.run.degrees[2];
+        renderNotes();
+        renderPlaques();
+      },
+      mark(){
+        if(!tour.run) return;
+        const cells = runCells();
+        markSpan(cells);
+        for(const c of cells.slice(1)) markCell(c.s, c.f);
+      },
+    },
+    {
+      // The method, and the reason the app is playable with the numbers off.
+      // Every step before this one teaches the game; without this one the game
+      // has no technique behind it, and Hidden mode is just guessing faster.
+      // Shown on the real neck in the real key rather than as a diagram — the
+      // numerals are already printed on those circles, so the board says
+      // 7 3 6 2 by itself and the copy only has to point.
+      title:'Too far to slide? Cross strings.',
+      body(){
+        // cycleColumn() has a candidate in every key, but a step that throws
+        // would take the whole tour down with it.
+        const d = tour.cyc ? tour.cyc.degrees : CYCLE.slice(0, 6);
+        const marks = {};
+        d.forEach((deg, i)=>{ marks[deg] = i === 0 ? 'from' : i === 1 ? 'to' : 'via'; });
+        return `<p>Your <b>${d[1]}</b> is five frets up this string. One string over at the <b>same fret</b>, it's already there. Too far to slide? Cross to it instead.</p>`
+          + `<p>Each string you cross moves one more place along <b>7 3 6 2 5 1 4</b> — same order, every key. Learn those seven and you cross the neck without counting.</p>`
+          + cycleRowHtml(marks)
+          + `<p>One catch: <b>G to B</b> is tuned closer than the other pairs, so crossing it the number sits <b>a fret higher</b> — that's the jog on the board — and stays there the rest of the way up. <a href="/major-minor-degree-map" target="_blank" rel="noopener">The degree map</a> draws it out.</p>`;
+      },
+      target:()=> tour.cyc ? boardSpanNode(columnCells()) : fretboardWrapEl,
+      pad:10,
+      // The run covers two frets now that the G-B jog is in it, so it is
+      // centred between them rather than on either.
+      focus:()=> tour.cyc ? {s:0, f:tour.cyc.fret, f2:tour.cyc.fret + 1} : null,
+      enter(){
+        tour.cyc = cycleColumn();
+        if(!tour.cyc) return;
+        // Asked for the degree ONE string over rather than the one at the far
+        // end of the run: crossing is what the sequence buys you, and a target
+        // five strings away is one the very next step would tell them to slide
+        // to instead.
+        state.current = {string:0, fret:tour.cyc.fret};
+        state.prevDegree = null;
+        state.prevDegree2 = null;
+        state.targetDegree = tour.cyc.degrees[1];
+        renderNotes();
+        renderPlaques();
+      },
+      mark(){
+        if(!tour.cyc) return;
+        const cells = columnCells();
+        markSpan(cells);
+        // The first one is already the live note, lit by renderNotes — ringing
+        // it again would say "go here" about the place you're standing.
+        for(const c of cells.slice(1)) markCell(c.s, c.f);
+      },
+    },
+    {
+      // The two moves, and the only question worth asking before making one.
+      // This is where the tour used to spend a whole hands-on step on the
+      // sequence's broken join. That join is real, but it is an exception, and
+      // drilling an exception before the rule is in place teaches the
+      // exception. The rule is: how far apart are the two numbers. The join is
+      // still there in the hint panel and on the degree map for whoever walks
+      // into it, which is the moment it means anything.
+      title:'Which move, and when',
+      body(){
+        const r = tour.run ? tour.run.degrees : SCALE_RUNS[0];
+        const c = tour.cyc ? tour.cyc.degrees : CYCLE.slice(0, 4);
+        return `<p>Every turn asks the same question: how far is <b>Find</b> from <b>Current</b>? A step or two — like <b>${r[0]}</b> to <b>${r[2]}</b> — and it's already on the string you're on, four frets at most. Slide, and let the formula tell you how far.</p>`
+          + `<p>Any further and sliding means half the neck. Cross instead: one string over covers five frets in a single move, which is what <b>7 3 6 2 5 1 4</b> buys you — it's how the <b>${c[0]}</b> reached the <b>${c[1]}</b>. Get near with the sequence, then slide the rest with the formula. Across, then along.</p>`;
+      },
+      // The two numbers the decision is read off, which is the whole step.
+      target:()=> elementSpanNode(['.plaque.current', '.plaque.target']),
+      pad:7,
+    },
+    {
+      // The payoff, and the first one that arrives. Everything before this is
+      // method; a beginner who has just been handed two of those and a rule for
+      // choosing between them is owed an answer to "and then what". Chords are
+      // the honest answer because they are the thing they are already learning
+      // — the numbers turn a shape they memorised into one they can read.
+      title:'What this buys you',
+      body:
+        `<p>If you are wondering why this is important: knowing what is what on the fretboard will make you a better guitarist, it will help you improvise, but it will even benefit you while learning chords.</p>`
+      + `<p>Take a good look at all the chords you have learned, and you will see they consist of the <b>1</b>, the <b>3</b> and the <b>5</b>. Replace the 3 with a <b>♭3</b> for minor chords. Need a sus2 or sus4 chord? Add the <b>2nd</b> or the <b>4th</b>. Same for 7th chords.</p>`
+      + `<p><a href="/chords-from-degrees" target="_blank" rel="noopener">Chords from degrees</a> takes it from there.</p>`,
+      // No one spot on the board is the subject — the whole neck is.
+      target:()=> fretboardWrapEl, pad:4,
     },
     {
       // The destination, stated plainly. Numerals are a crutch the app is
@@ -1723,7 +1949,7 @@
     if(!step) return;
     let node = null;
     try{ node = step.target(); }catch(e){}
-    if(!node){ tourHoleEl.style.opacity = '0'; return; }
+    if(!node){ tourHoleEl.style.opacity = '0'; placeTourCard(null); return; }
     const a = appEl.getBoundingClientRect();
     const r = node.getBoundingClientRect();
     const pad = step.pad || 8;
@@ -1733,50 +1959,167 @@
     tourHoleEl.style.width  = (r.width  + pad*2) + 'px';
     tourHoleEl.style.height = (r.height + pad*2) + 'px';
     tourHoleEl.style.borderRadius = step.radius || '14px';
+    placeTourCard({left: r.left - a.left - pad, width: r.width + pad*2});
   }
 
-  // Rings drawn on every valid answer for the hands-on step. Appended to the
-  // existing note group (so they inherit its position) and read their centre
-  // off the circle already there rather than recomputing layout maths.
+  // Where the card sits so that it isn't covering the thing it describes.
+  //
+  // The two boards need opposite tactics. A vertical board scrolls, so the card
+  // stays put at the bottom and centerOnClear lifts the subject into the space
+  // above it. A horizontal board can't scroll — the whole neck is already on
+  // screen, and a fret column runs the full height of it, so there is no "above"
+  // to move anything into — but it is wide, so the card moves sideways instead,
+  // to whichever end the subject isn't at.
+  //
+  // Decided from the subject's own position rather than from whether the two
+  // currently overlap, so it can't oscillate. A subject spanning most of the
+  // width (the whole board, on the opening step) has no clear side to prefer,
+  // and stays centred.
+  function placeTourCard(hole){
+    tourCardEl.classList.remove('left', 'right');
+    if(!hole || !layout || layout.orientation !== 'horizontal') return;
+    const w = appEl.getBoundingClientRect().width;
+    if(!w || hole.width > w * 0.55) return;
+    tourCardEl.classList.add(hole.left + hole.width/2 < w/2 ? 'right' : 'left');
+  }
+
+  // One ring on one position. Appended to the existing note group (so it
+  // inherits its position) and reading its centre off the circle already there
+  // rather than recomputing layout maths.
+  function markCell(s, f, cls){
+    const node = noteIndex[s] && noteIndex[s][f];
+    if(!node) return null;
+    const base = node.querySelector('.note-visible');
+    if(!base) return null;
+    const ring = el('circle', {
+      cx: base.getAttribute('cx'), cy: base.getAttribute('cy'),
+      r: 16*layout.noteScale, fill:'none',
+      stroke:'var(--seek)', 'stroke-width':2.5, class: cls || 'tour-hint'
+    });
+    node.appendChild(ring);
+    return ring;
+  }
+
+  // A dashed thread through a run of positions, drawn UNDER the notes so it
+  // reads as the path between them rather than a line over the top. Static
+  // rather than pulsing: it is the route, not the invitation.
+  function markSpan(cells){
+    const pts = [];
+    for(const c of cells){
+      const node = noteIndex[c.s] && noteIndex[c.s][c.f];
+      const base = node && node.querySelector('.note-visible');
+      if(base) pts.push(base.getAttribute('cx') + ',' + base.getAttribute('cy'));
+    }
+    if(pts.length < 2) return;
+    notesGroupEl.insertBefore(el('polyline', {
+      points: pts.join(' '), fill:'none', stroke:'var(--seek)',
+      'stroke-width':1.6, 'stroke-dasharray':'4 4', opacity:.75,
+      class:'tour-mark tour-span'
+    }), notesGroupEl.firstChild);
+  }
+
+  // A stand-in target covering several things at once, for the steps whose
+  // subject is a run of notes or a pair of controls rather than one element.
+  // positionTourHole only ever asks a target for its bounding rect, so anything
+  // that can answer that is a valid target — no wrapper has to exist in the DOM.
+  function spanNode(rects){
+    if(!rects.length) return null;
+    const l = Math.min(...rects.map(q => q.left));
+    const t = Math.min(...rects.map(q => q.top));
+    const r = Math.max(...rects.map(q => q.right));
+    const b = Math.max(...rects.map(q => q.bottom));
+    return {getBoundingClientRect: ()=> ({left:l, top:t, right:r, bottom:b, width:r-l, height:b-t})};
+  }
+
+  // Measured off .note-visible for the same reason currentNoteNode is: the
+  // group also carries the breathing .pulse halo.
+  function boardSpanNode(cells){
+    const rects = [];
+    for(const c of cells){
+      const node = noteIndex[c.s] && noteIndex[c.s][c.f];
+      const base = node && node.querySelector('.note-visible');
+      if(base) rects.push(base.getBoundingClientRect());
+    }
+    return spanNode(rects);
+  }
+
+  function elementSpanNode(selectors){
+    return spanNode(selectors
+      .map(sel => document.querySelector(sel))
+      .filter(Boolean)
+      .map(n => n.getBoundingClientRect()));
+  }
+
+  // Rings on every valid answer for the hands-on step — the fastest way to say
+  // "several spots count" without a sentence about it.
   function showTapHints(){
-    clearTapHints();
     for(let s=0; s<6; s++){
       for(let f=0; f<=FRET_COUNT; f++){
-        if(degreeAt(s,f) !== TOUR_DEGREE) continue;
-        const node = noteIndex[s] && noteIndex[s][f];
-        if(!node) continue;
-        const base = node.querySelector('.note-visible');
-        if(!base) continue;
-        node.appendChild(el('circle', {
-          cx: base.getAttribute('cx'), cy: base.getAttribute('cy'),
-          r: 16*layout.noteScale, fill:'none',
-          stroke:'var(--seek)', 'stroke-width':2.5, class:'tour-hint'
-        }));
+        if(degreeAt(s,f) === TOUR_DEGREE) markCell(s, f);
       }
     }
   }
-  function clearTapHints(){
-    for(const n of boardEl.querySelectorAll('.tour-hint')) n.remove();
+  function clearBoardMarks(){
+    for(const n of boardEl.querySelectorAll('.tour-hint, .tour-mark')) n.remove();
+  }
+
+  // ---------- the two board-teaching steps ----------
+  // The three notes of the scale run: a whole step, then a half.
+  const runCells = ()=> [0, 2, 3].map(d => ({s: tour.run.s, f: tour.run.f + d}));
+  const columnCells = ()=> tour.cyc.cells;
+  // A one-line answer to a tap, keeping the step where it is. The card jogs
+  // rather than flashing red: someone missing here is expected, not wrong.
+  function tourSay(html){
+    if(html) tourBodyEl.innerHTML = html;
+    restartAnim(tourCardEl, 'jog');
+  }
+
+  // Shared by every step that ends on a tap.
+  function tourAdvanceAfterTap(){
+    tour.awaitingTap = false;
+    tourEl.classList.remove('await-tap');
+    // Waits out the 380ms move so the next step doesn't talk over the board
+    // rearranging itself.
+    const next = tour.i + 1;
+    setTimeout(()=> goToTourStep(next), 460);
   }
 
   function goToTourStep(i){
     tour.i = i;
     const step = TOUR_STEPS[i];
-    tour.awaitingTap = !!step.awaitTap;
-    tourEl.classList.toggle('await-tap', tour.awaitingTap);
 
+    // enter() first: a step that has to go looking for its own subject on the
+    // board (a fret where the sequence reads cleanly, a 4 with a string above
+    // it) can come up empty in a way that decides whether the step is hands-on
+    // at all — so awaitTap is allowed to be a question asked afterwards.
     if(step.enter) step.enter();
+    tour.awaitingTap = typeof step.awaitTap === 'function' ? step.awaitTap() : !!step.awaitTap;
+    tourEl.classList.toggle('await-tap', tour.awaitingTap);
 
     tourStepEl.textContent = `Step ${i+1} of ${TOUR_STEPS.length}`;
     tourTitleEl.textContent = step.title;
     // innerHTML because a couple of steps carry emphasis and a link. Every
     // string here is authored above — nothing user-supplied reaches this.
-    tourBodyEl.innerHTML = step.body.replace('{key}', KEYS[state.keyIndex].name);
+    // A couple of steps build their copy from whatever they found on the board,
+    // so body can be a function; either way {key} is filled from the live key.
+    const copy = typeof step.body === 'function' ? step.body() : step.body;
+    tourBodyEl.innerHTML = copy.replace('{key}', KEYS[state.keyIndex].name);
     tourNextEl.hidden = tour.awaitingTap;
     tourNextEl.textContent = step.next || 'Next';
     tourSkipEl.hidden = (i === TOUR_STEPS.length - 1);   // nothing left to skip past
+    // Steps whose copy changes as they're played write it themselves, once the
+    // static body above has been laid down.
+    if(step.after) step.after();
+    // Scrolled only now: how much neck is left clear depends on how tall the
+    // card is, and the card is not that tall until its own copy is in it.
+    if(step.focus){
+      const c = step.focus();
+      if(c) centerOnClear(c.s, c.f, c.f2);
+    }
 
-    if(tour.awaitingTap) showTapHints(); else clearTapHints();
+    clearBoardMarks();
+    if(step.mark) step.mark();
+    else if(tour.awaitingTap) showTapHints();
     positionTourHole();
     // A step that reveals its own target (opening the drawer) can't be measured
     // until that settles; the hole's CSS transition makes the correction read
@@ -1788,19 +2131,10 @@
   // the degree they actually hit — the single most useful thing to say, and it
   // teaches the vocabulary in passing.
   function tourHandleTap(deg, isCorrect){
-    if(isCorrect){
-      tour.awaitingTap = false;
-      tourEl.classList.remove('await-tap');
-      // Waits out the 380ms move so the next step doesn't talk over the board
-      // rearranging itself.
-      const next = tour.i + 1;
-      setTimeout(()=> goToTourStep(next), 460);
-      return;
-    }
-    tourBodyEl.textContent = deg === null
+    if(isCorrect){ tourAdvanceAfterTap(); return; }
+    tourSay(deg === null
       ? "That one isn't in the scale, which is why it has no circle. Tap any circle ringed in gold."
-      : `That's a ${DEGREE_LABEL[deg]}. You're after a 5 — any circle ringed in gold.`;
-    restartAnim(tourCardEl, 'jog');
+      : `That's a ${DEGREE_LABEL[deg]}. You're after a 5 — any circle ringed in gold.`);
   }
 
   function startTour(){
@@ -1845,8 +2179,11 @@
     const finished = tour.i >= TOUR_STEPS.length - 1;
     tour.active = false;
     tour.awaitingTap = false;
-    clearTapHints();
+    tour.run = null;
+    tour.cyc = null;
+    clearBoardMarks();
     tourEl.classList.remove('open', 'await-tap');
+    tourCardEl.classList.remove('left', 'right');
     document.body.classList.remove('tour-open');
     // The last step opens the drawer to point inside it. On wide screens that's
     // the rail's normal resting state; on phones it isn't, so hand the board
@@ -2092,7 +2429,9 @@
     // renderNotes above threw away the note groups the hints and the spotlight
     // were measured against, so both have to be re-derived from the new ones.
     if(tour.active){
-      if(tour.awaitingTap) showTapHints();
+      const step = TOUR_STEPS[tour.i];
+      if(step && step.mark) step.mark();
+      else if(tour.awaitingTap) showTapHints();
       centerOn(state.current.string, state.current.fret);
       positionTourHole();
     }

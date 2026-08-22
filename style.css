@@ -740,10 +740,21 @@
     position:absolute; left:12px; right:12px;
     bottom:calc(12px + env(safe-area-inset-bottom));
     max-width:400px; margin:0 auto;
+    /* A step that outgrows this scrolls rather than eating the board: the card
+       sits on top of the neck, and centerOnClear can only find room above it
+       if there is room above it. Trim the copy first — this is the floor, not
+       a licence. */
+    max-height:58vh; overflow-y:auto; overscroll-behavior:contain;
     background:var(--panel); border:1px solid var(--line-strong); border-radius:14px;
     padding:15px 16px 13px;
     box-shadow:0 16px 40px rgba(0,0,0,.55);
   }
+  /* Pushed to one end when the step's subject is at the other — see
+     placeTourCard(). Only the horizontal board needs this; the vertical one
+     scrolls the neck instead, which keeps the card where the eye left it. */
+  .tour-card.left{ margin-left:0; margin-right:auto; }
+  .tour-card.right{ margin-right:0; margin-left:auto; }
+
   .tour-step{
     font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:10px; letter-spacing:.12em;
     text-transform:uppercase; color:var(--dim); margin-bottom:6px;
@@ -796,6 +807,14 @@
     animation:tourHint 1.25s ease-in-out infinite;
     transform-box:fill-box; transform-origin:center;
   }
+  /* The sequence strip, reused verbatim from the hint panel so the diagram a
+     newcomer meets on day one is the diagram they keep meeting. Only the
+     spacing differs: here it sits between paragraphs rather than under a
+     numbered step. */
+  .tour-body .hint-cycle,
+  .tour-body .hint-formula{ margin:0 0 9px; }
+  .tour-body .hint-cycle:last-child,
+  .tour-body .hint-formula:last-child{ margin-bottom:0; }
 
   @media (prefers-reduced-motion:reduce){
     .tour-hole{ transition:none; }
