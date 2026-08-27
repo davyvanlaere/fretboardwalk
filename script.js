@@ -720,7 +720,15 @@
     // Floored, so a short window or a card taller than the board still scrolls
     // somewhere sane instead of pinning everything to the nut.
     const clear = Math.max(140, Math.min(scroller.clientHeight, cardTop - top));
-    scroller.scrollTo({top: Math.max(0, pos - clear/2), behavior:'smooth'});
+    // Seat the whole spotlit span inside the clear band, not just its midpoint:
+    // centring a two- or three-fret run leaves its last note under the card on a
+    // short phone. margin covers the note radius so the outer circles clear too.
+    const lo = Math.min(layout.xCenter[f], Number.isFinite(layout.xCenter[f2]) ? layout.xCenter[f2] : layout.xCenter[f]);
+    const hi = Math.max(layout.xCenter[f], Number.isFinite(layout.xCenter[f2]) ? layout.xCenter[f2] : layout.xCenter[f]);
+    const margin = 12 + 14 * layout.noteScale;
+    const spanH = (hi - lo) + margin * 2;
+    const offset = spanH <= clear ? (clear - spanH) / 2 : 0;
+    scroller.scrollTo({top: Math.max(0, lo - margin - offset), behavior:'smooth'});
   }
 
   // Shared by practice's streak and time attack's score, which repaint the
@@ -1806,9 +1814,9 @@
       title:'Along a string, it’s just the scale',
       body(){
         const d = tour.run ? tour.run.degrees : SCALE_RUNS[0];
-        return `<p>Walk up one string and you're walking the scale — which isn't evenly spaced. Every step is <b>two frets</b> except two of them. Here <b>${d[0]}</b> to <b>${d[1]}</b> is two frets, and <b>${d[1]}</b> to <b>${d[2]}</b> is one.</p>`
+        return `<p>Up one string is the scale itself — uneven: here <b>${d[0]}</b> to <b>${d[1]}</b> is two frets, <b>${d[1]}</b> to <b>${d[2]}</b> one.</p>`
           + formulaRowHtml(d[0], d[2], true)
-          + `<p>Only <b>3 to 4</b> and <b>7 to 1</b> are short, in every key — that's the whole major-scale formula. It's what tells your hand how far to slide, once you're on the string you want.</p>`;
+          + `<p>Only <b>3 to 4</b> and <b>7 to 1</b> are short, every key — the whole formula, and what sets your slide.</p>`;
       },
       target:()=> tour.run ? boardSpanNode(runCells()) : fretboardWrapEl,
       pad:10,
@@ -1846,10 +1854,10 @@
         const d = tour.cyc ? tour.cyc.degrees : CYCLE.slice(0, 6);
         const marks = {};
         d.forEach((deg, i)=>{ marks[deg] = i === 0 ? 'from' : i === 1 ? 'to' : 'via'; });
-        return `<p>Your <b>${d[1]}</b> is five frets up this string. One string over at the <b>same fret</b>, it's already there. Too far to slide? Cross to it instead.</p>`
-          + `<p>Each string you cross moves one more place along <b>7 3 6 2 5 1 4</b> — same order, every key. Learn those seven and you cross the neck without counting.</p>`
+        return `<p>Your <b>${d[1]}</b> is five frets up this string — but one string over, at the <b>same fret</b>, it's already there. Too far to slide? Cross instead.</p>`
+          + `<p>Each string you cross moves one place along <b>7 3 6 2 5 1 4</b> — same order, every key. Learn those seven and cross the neck without counting.</p>`
           + cycleRowHtml(marks)
-          + `<p>One catch: <b>G to B</b> is tuned closer than the other pairs, so crossing it the number sits <b>a fret higher</b> — that's the jog on the board — and stays there the rest of the way up. <a href="/major-minor-degree-map" target="_blank" rel="noopener">The degree map</a> draws it out.</p>`;
+          + `<p>One catch: crossing <b>G to B</b> the number sits <b>a fret higher</b> — that's the jog on the board, and it holds the rest of the way up. <a href="/major-minor-degree-map" target="_blank" rel="noopener">The degree map</a> draws it out.</p>`;
       },
       target:()=> tour.cyc ? boardSpanNode(columnCells()) : fretboardWrapEl,
       pad:10,
@@ -1906,8 +1914,8 @@
       // — the numbers turn a shape they memorised into one they can read.
       title:'What this buys you',
       body:
-        `<p>If you are wondering why this is important: knowing what is what on the fretboard will make you a better guitarist, it will help you improvise, but it will even benefit you while learning chords.</p>`
-      + `<p>Take a good look at all the chords you have learned, and you will see they consist of the <b>1</b>, the <b>3</b> and the <b>5</b>. Replace the 3 with a <b>♭3</b> for minor chords. Need a sus2 or sus4 chord? Add the <b>2nd</b> or the <b>4th</b>. Same for 7th chords.</p>`
+        `<p>Knowing the neck makes you a better improviser — and it pays off in the chords you're already learning.</p>`
+      + `<p>Every chord you know is built from the <b>1</b>, the <b>3</b> and the <b>5</b>. Swap the <b>3</b> for a <b>♭3</b> to make it minor; add the <b>2</b> or <b>4</b> for sus chords. Same for 7ths.</p>`
       + `<p><a href="/chords-from-degrees" target="_blank" rel="noopener">Chords from degrees</a> takes it from there.</p>`,
       // No one spot on the board is the subject — the whole neck is.
       target:()=> fretboardWrapEl, pad:4,
