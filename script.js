@@ -1037,10 +1037,6 @@
   // one place along the sequence, with the quirk named where it bites.
   const CYCLE = ['7','3','6','2','5','1','4'];
 
-  // What a hand covers without shifting position: three frets of travel is the
-  // four-fret box, one finger per fret. Past that a slide stops being one
-  // thought and becomes a journey the crossing move should have made.
-  const SLIDE_MAX = 3;
   // Hand prices in tenths, so the arithmetic stays whole numbers and two routes
   // that genuinely cost the same compare equal rather than nearly equal.
   const PRICE_FRET = 10, PRICE_STRING = 11;
@@ -1059,12 +1055,21 @@
   const crossShift = (s, ns) => (ns - s) * 5 - (STRINGS[ns].midi - STRINGS[s].midi);
 
   // Every move a player can be told to make from one square, and nothing else.
+  //
+  // A slide is one move however far it goes, and deliberately uncapped. A cap
+  // reads like prudence but only ever splits one slide into two — "go down two
+  // frets, then two more" — because which note you are sent to is settled on
+  // hand price before any of this runs, and by then a note more than a few
+  // frets along your own string has already lost to a nearer one across it.
+  // Measured over every key, position and target: the longest slide a winning
+  // route uses is four frets, with a cap or without one. The limit is a fact
+  // about the prices, not a rule that needs writing down.
   function movesFrom(s, f){
     const deg = degreeAt(s, f);
     const out = [];
-    for(let d = -SLIDE_MAX; d <= SLIDE_MAX; d++){
-      const nf = f + d, to = (d && nf >= 0 && nf <= FRET_COUNT) ? degreeAt(s, nf) : null;
-      if(to) out.push({kind:'slide', string:s, fret:nf, from:deg, to, frets:d});
+    for(let nf = 0; nf <= FRET_COUNT; nf++){
+      const to = nf === f ? null : degreeAt(s, nf);
+      if(to) out.push({kind:'slide', string:s, fret:nf, from:deg, to, frets:nf - f});
     }
     // The sequence never wraps: its two ends are the two sides of the tritone,
     // which is exactly the crossing that doesn't work.
@@ -1200,23 +1205,39 @@
   // route behind it — the same picture a hint will show later rather than a
   // second dialect of it. Empty for a lowered degree, which has no place in the
   // formula and is explained by its name instead.
-  function formulaRowHtml(fromDeg, toDeg, up){
-    const a = NATURALS.indexOf(fromDeg);
-    const b = NATURALS.indexOf(toDeg);
-    if(a < 0 || b < 0) return '';
+  // The row is fourteen cells, not seven: a degree, the gap above it, a degree,
+  // and so on round to the 7. That is what lets a lowered degree be drawn at
+  // all — it has no cell of its own because it isn't in the scale, it lives
+  // inside the whole step below the degree it is named after, which is the
+  // thing that makes it lowered. Standing in a gap is then just another place
+  // on the row, and the gap says the ♭'s name instead of its width.
+  const ROW_CELLS = 14;
+  const slotOf = (deg) => NATURAL_OF[deg]
+    ? (NATURALS.indexOf(NATURAL_OF[deg]) - 1) * 2 + 1
+    : NATURALS.indexOf(deg) * 2;
 
-    const steps = up ? (b - a + 7) % 7 : (a - b + 7) % 7;
-    const litGap = new Set(), viaDeg = new Set();
-    for(let n = 0; n < steps; n++){
-      litGap.add(up ? (a + n) % 7 : (a - n - 1 + 7) % 7);
-      if(n > 0) viaDeg.add(up ? (a + n) % 7 : (a - n + 7) % 7);
-    }
+  function formulaRowHtml(fromDeg, toDeg, up){
+    const a = slotOf(fromDeg), b = slotOf(toDeg);
+    if(a < 0 || b < 0 || a === b) return '';
+
+    // Walked round the ring rather than counted, so the picture is of the
+    // journey and not just of its two ends.
+    const mark = new Array(ROW_CELLS).fill('');
+    const step = up ? 1 : ROW_CELLS - 1;
+    for(let i = (a + step) % ROW_CELLS; i !== b; i = (i + step) % ROW_CELLS) mark[i] = 'via';
+    mark[a] = 'from';
+    mark[b] = 'to';
 
     let cells = '';
-    for(let i = 0; i < 7; i++){
-      const dc = i === a ? ' from' : i === b ? ' to' : viaDeg.has(i) ? ' via' : '';
-      cells += `<span class="deg${dc}">${NATURALS[i]}</span>`;
-      cells += `<span class="gap${litGap.has(i) ? ' lit' : ''}">${SCALE_GAPS[i]}</span>`;
+    for(let i = 0; i < ROW_CELLS; i++){
+      const cls = mark[i];
+      if(i % 2 === 0){ cells += `<span class="deg ${cls}">${NATURALS[i / 2]}</span>`; continue; }
+      // A gap reports its width, unless the slide starts or ends inside it —
+      // then it says which ♭ that is, the more useful half of the same fact.
+      const label = cls === 'from' ? DEGREE_LABEL[fromDeg]
+                  : cls === 'to'   ? DEGREE_LABEL[toDeg]
+                  : SCALE_GAPS[(i - 1) / 2];
+      cells += `<span class="gap ${cls}${cls === 'via' ? ' lit' : ''}">${label}</span>`;
     }
     return `<div class="hint-formula">${cells}</div>`;
   }
@@ -1270,19 +1291,21 @@
 
   // One slide. A lowered degree is described by the name it already carries —
   // it is the natural degree flattened, and saying so is the whole lesson — and
-  // every other slide is a distance read straight off the major scale.
+  // every other slide is a distance read straight off the major scale. The row
+  // comes with all of them: how far to slide IS the formula, so the step that
+  // asks for a slide is exactly the moment it is worth looking at.
   function slideHtml(m){
-    if(NATURAL_OF[m.from] === m.to)
-      return `<b>${L(m.from)}</b> is the <b>${m.to}</b> flattened, so the <b>${m.to}</b> is `
-           + `${fretWord(m.frets)} ${wayWord(m.frets)}.`;
-    if(NATURAL_OF[m.to] === m.from)
-      return `<b>${L(m.to)}</b> is this <b>${m.from}</b> flattened — ${fretWord(m.frets)} `
-           + `${wayWord(m.frets)}.`;
-    const dist = Math.abs(m.frets) <= 2
-      ? `is ${stepWord(m.frets)} — go ${wayWord(m.frets)} ${fretWord(m.frets)}`
-      : `is ${fretWord(m.frets)} ${wayWord(m.frets)} the string`;
-    return `<b>${L(m.from)}</b> to <b>${L(m.to)}</b> ${dist}.`
-         + formulaRowHtml(m.from, m.to, m.frets > 0);
+    const words =
+      NATURAL_OF[m.from] === m.to
+        ? `<b>${L(m.from)}</b> is the <b>${m.to}</b> flattened, so the <b>${m.to}</b> is `
+          + `${fretWord(m.frets)} ${wayWord(m.frets)}.`
+      : NATURAL_OF[m.to] === m.from
+        ? `<b>${L(m.to)}</b> is this <b>${m.from}</b> flattened — ${fretWord(m.frets)} `
+          + `${wayWord(m.frets)}.`
+      : `<b>${L(m.from)}</b> to <b>${L(m.to)}</b> ` + (Math.abs(m.frets) <= 2
+          ? `is ${stepWord(m.frets)} — go ${wayWord(m.frets)} ${fretWord(m.frets)}.`
+          : `is ${fretWord(m.frets)} ${wayWord(m.frets)} the string.`);
+    return words + formulaRowHtml(m.from, m.to, m.frets > 0);
   }
 
   // One crossing. "Same fret" is the rule, so it is claimed only where it holds
@@ -1292,8 +1315,9 @@
     const where = m.quirk
       ? `, ${fretWord(m.frets)} ${wayWord(m.frets)} across the <b>G–B</b> pair`
       : ', same fret';
-    return `<b>One string ${m.dir === 1 ? 'thinner' : 'thicker'}</b>${where}: `
-         + `<b>${m.from}</b> to <b>${m.to}</b>, one place along <b>7 3 6 2 5 1 4</b>.`
+    return `<b>One string ${m.dir === 1 ? 'thinner' : 'thicker'}</b>${where}, `
+         + `from <b>${m.from}</b> to <b>${m.to}</b>. One step along the memorised `
+         + `circle of fourths sequence (<b>7 3 6 2 5 1 4</b>).`
          + cycleStripHtml(m);
   }
 
@@ -1321,7 +1345,10 @@
                     next.dir === (m.from === '4' ? 1 : -1) ? BREAK_EXITS[m.from] : null;
       if(exits && exits.indexOf(m.to) >= 0){
         broke = true;
-        return breakHtml(m, exits) + breakFigureHtml(m.from, m.to);
+        // The fork says which way out; the row still says how far, because this
+        // leg is a slide like any other.
+        return breakHtml(m, exits) + breakFigureHtml(m.from, m.to)
+             + formulaRowHtml(m.from, m.to, m.frets > 0);
       }
       return slideHtml(m);
     });
@@ -1700,9 +1727,9 @@
         const marks = {};
         d.forEach((deg, i)=>{ marks[deg] = i === 0 ? 'from' : i === 1 ? 'to' : 'via'; });
         return `<p>Your <b>${d[1]}</b> is five frets up this string — but one string over, at the <b>same fret</b>, it's already there. Too far to slide? Cross instead.</p>`
-          + `<p>Each string you cross moves one place along <b>7 3 6 2 5 1 4</b> — same order, every key. Learn those seven and cross the neck without counting.</p>`
+          + `<p>Each string you cross is one step along the <b>circle of fourths</b>: <b>7 3 6 2 5 1 4</b>, same order in every key. Learn those seven and cross without counting.</p>`
           + cycleRowHtml(marks)
-          + `<p>One catch: crossing <b>G to B</b> the number sits <b>a fret higher</b> — that's the jog on the board, and it holds the rest of the way up. <a href="/major-minor-degree-map" target="_blank" rel="noopener">The degree map</a> draws it out.</p>`;
+          + `<p>One catch: <b>G to B</b> is tuned a third, not a fourth — the number sits <b>a fret higher</b>, and stays there the rest of the way up. <a href="/major-minor-degree-map" target="_blank" rel="noopener">The degree map</a> draws it out.</p>`;
       },
       target:()=> tour.cyc ? boardSpanNode(columnCells()) : fretboardWrapEl,
       pad:10,
@@ -1745,7 +1772,7 @@
         const r = tour.run ? tour.run.degrees : SCALE_RUNS[0];
         const c = tour.cyc ? tour.cyc.degrees : CYCLE.slice(0, 4);
         return `<p>Every turn asks the same question: how far is <b>Find</b> from <b>Current</b>? A step or two — like <b>${r[0]}</b> to <b>${r[2]}</b> — and it's already on the string you're on, four frets at most. Slide, and let the formula tell you how far.</p>`
-          + `<p>Any further and sliding means half the neck. Cross instead: one string over covers five frets in a single move, which is what <b>7 3 6 2 5 1 4</b> buys you — it's how the <b>${c[0]}</b> reached the <b>${c[1]}</b>. Get near with the sequence, then slide the rest with the formula. Across, then along.</p>`;
+          + `<p>Any further and sliding means half the neck. Cross instead: one string over covers five frets in a single move, which is what the <b>circle of fourths</b> buys you — it's how the <b>${c[0]}</b> reached the <b>${c[1]}</b>. Get near with the sequence, then slide the rest with the formula. Across, then along.</p>`;
       },
       // The two numbers the decision is read off, which is the whole step.
       target:()=> elementSpanNode(['.plaque.current', '.plaque.target']),
