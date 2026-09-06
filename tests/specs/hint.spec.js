@@ -264,6 +264,28 @@ test.describe('the "how do I find it" hint', () => {
     expect(labels[2], 'bottom branch should be the higher fret').toBe(await degAt(5));
   });
 
+  // The handle every example above leans on, checked in its own right. Naming a
+  // degree rather than a square has to land on that degree somewhere the route
+  // isn't boxed in, and anything unrecognised has to be ignored rather than
+  // guessed at — a silently mistaken start would make every example above a
+  // test of the wrong position.
+  test('?at= takes a square or a degree, and ignores nonsense', async ({ page }) => {
+    for (const deg of ['2', '4', '7']) {
+      await gotoRoute(page, { at: deg, find: '1' });
+      await openHint(page);
+      const start = (await drawnRoute(page))[0];
+      expect(start.degree, `?at=${deg} should stand on a ${deg}`).toBe(deg);
+      // Middle of the neck, so there is somewhere to go in every direction.
+      expect(start.string, `?at=${deg} landed on an outer string`).toBeGreaterThan(0);
+      expect(start.string).toBeLessThan(5);
+      expect(start.fret, `?at=${deg} landed at fret ${start.fret}`).toBeGreaterThan(3);
+      expect(start.fret).toBeLessThan(12);
+    }
+    // Unrecognised, so the game opens where it normally would: on the root.
+    await gotoRoute(page, { at: 'nonsense', find: '6' });
+    await expect(page.locator('#curNum')).toHaveText('1');
+  });
+
   // ---- the rules, over whatever the game deals ----
 
   test('offers itself by naming the degree being asked for', async ({ page }) => {

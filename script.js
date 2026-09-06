@@ -2309,19 +2309,40 @@
     }
   }catch(e){}
 
-  // ?at=<string>.<fret>&find=<degree> pins the opening position and the first
-  // question — the same kind of handle as ?init=true, and the only way to look
-  // at one particular route without playing until the game happens to offer it.
-  // Strings are numbered from the low E, degrees written the way the cells are
-  // ('b7', not '♭7').
+  // Where to stand when ?at= names a degree rather than a square: the one
+  // nearest the middle of the neck, which is the only place a route has
+  // somewhere to go in all four directions. Anywhere near an end or an outer
+  // string quietly answers a different question than the one being asked.
+  // Measured with the hint's own hand prices rather than a weight invented for
+  // the occasion: frets and strings are different sizes, and the router already
+  // knows by how much.
+  function midNeckSquare(degree){
+    let best = null;
+    for(let s = 0; s <= 5; s++) for(let f = 0; f <= FRET_COUNT; f++){
+      if(degreeAt(s, f) !== degree) continue;
+      const d = PRICE_FRET * Math.abs(f - FRET_COUNT / 2) +
+                PRICE_STRING * Math.abs(s - 2.5);
+      if(!best || d < best.d) best = {d, square:{string:s, fret:f}};
+    }
+    return best && best.square;
+  }
+
+  // ?at=<string>.<fret> or ?at=<degree>, with ?find=<degree>: pins the opening
+  // position and the first question — the same kind of handle as ?init=true,
+  // and the only way to look at one particular route without playing until the
+  // game happens to offer it. Strings count from the low E; degrees are written
+  // the way the cells are ('b7', not '♭7'). Anything that doesn't name a real
+  // square or an enabled degree is ignored rather than guessed at.
   function applyStartOverride(){
     let q;
     try{ q = new URLSearchParams(location.search); }catch(e){ return; }
-    const at = (q.get('at') || '').split('.').map(Number);
-    if(at.length === 2 && at.every(Number.isInteger) &&
-       at[0] >= 0 && at[0] <= 5 && at[1] >= 0 && at[1] <= FRET_COUNT){
-      state.current = {string:at[0], fret:at[1]};
-    }
+    const at = q.get('at') || '', n = at.split('.').map(Number);
+    const square = n.length === 2 && n.every(Number.isInteger) &&
+                   n[0] >= 0 && n[0] <= 5 && n[1] >= 0 && n[1] <= FRET_COUNT
+      ? {string:n[0], fret:n[1]}
+      : (enabledDegrees().indexOf(at) >= 0 ? midNeckSquare(at) : null);
+    if(square) state.current = square;
+
     const find = q.get('find');
     if(find && enabledDegrees().indexOf(find) >= 0) state.targetDegree = find;
   }

@@ -82,14 +82,18 @@ standing on a 3 is both slow and unreliable. `index.html` takes two query
 parameters for exactly this, alongside the older `?init=true`:
 
 ```
-/?at=2.8&find=3      # stand on string 2 (counting from the low E), fret 8; ask for a 3
+/?at=4&find=6        # stand on a 4, ask for a 6
+/?at=2.8&find=3      # or name the square: string 2 (counting from the low E), fret 8
 /?at=3.12&find=b7    # degrees are written the way the cells are: b7, not ♭7
 ```
 
-Both are ignored unless they name a real square and an enabled degree, so a
-lowered degree also needs `includeFlats` seeded into settings. The worked
-examples in `hint.spec.js` all start this way, and the same URLs are the
-quickest way to look at a route by hand.
+Given a degree rather than a square, `at` picks the one nearest the middle of
+the neck — measured with the router's own hand prices, so the start is always
+an inner string around frets 6–10 and the route has somewhere to go in every
+direction. Both parameters are ignored unless they name a real square or an
+enabled degree, so a lowered degree also needs `includeFlats` seeded into
+settings. The worked examples in `hint.spec.js` all start this way, and the
+same URLs are the quickest way to look at a route by hand.
 
 ## `genchords.js`
 
