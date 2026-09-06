@@ -297,10 +297,9 @@
      "on the way" rather than "arrive here". */
   .hint-cycle span.via{ background:var(--panel-3); color:var(--muted); }
   /* The sequence is written cut at its odd join, so the 4 and the 7 at either
-     end are the two sides of one seam. Outlined rather than bordered so the
-     cells don't shift, and it turns red only on the route that crosses it. */
+     end are the two sides of one seam — the join no crossing ever makes.
+     Outlined rather than bordered so the cells don't shift. */
   .hint-cycle span.seam{ outline:1px dashed var(--dim); outline-offset:-1px; }
-  .hint-cycle.seam-lit span.seam{ outline:1.5px dashed var(--miss); }
 
   .hint-steps{
     margin:0; padding:0; list-style:none; counter-reset:hstepn;
@@ -317,14 +316,14 @@
     font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:9.5px; font-weight:600;
     color:#2a1a00; background:var(--seek); border-radius:4px;
   }
-  /* Floated so the step's text wraps beside it rather than under it — the fork
-     is half a sentence, not a separate exhibit, and stacking the two cost a
-     whole extra block of height. Fixed size so it can't balloon on a wide rail. */
+  /* One picture per step, sitting under the sentence it finishes — the same
+     place the cycle and formula strips sit, so a step reads the same way
+     whichever picture it carries. Capped rather than fluid: the rail is barely
+     wider than the fork, and stretched to fill it the two branches drift apart
+     far enough to stop reading as one choice. */
   .hint-branch{
-    float:right; width:152px; height:45px;
-    margin:0 0 2px 10px;
+    display:block; width:100%; max-width:172px; height:50px; margin:7px 0 0;
   }
-  .hint-steps li{ display:flow-root; }   /* contain the float */
   .hint-steps b{ color:var(--text); font-weight:600; }
   .hint-steps em{ font-style:normal; color:var(--text); }
 

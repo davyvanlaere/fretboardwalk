@@ -73,6 +73,23 @@ these specs are about.
 | `board.spec.js` | Degree mapping per key, lowered degrees, target selection rules, and what a correct/wrong tap does |
 | `settings.spec.js` | Persistence round-trips, and that hand-edited or corrupt storage can't break startup |
 | `timeattack.spec.js` | Run chrome, the per-display-mode score buckets, leaderboard cleanup, and restoring the practice run underneath |
+| `hint.spec.js` | "How do I find it": which note it sends you to, and whether the route it describes is one the two moves can actually make |
+
+### Looking at one particular route
+
+The game picks its own questions, so waiting for it to ask a ♭7 while you are
+standing on a 3 is both slow and unreliable. `index.html` takes two query
+parameters for exactly this, alongside the older `?init=true`:
+
+```
+/?at=2.8&find=3      # stand on string 2 (counting from the low E), fret 8; ask for a 3
+/?at=3.12&find=b7    # degrees are written the way the cells are: b7, not ♭7
+```
+
+Both are ignored unless they name a real square and an enabled degree, so a
+lowered degree also needs `includeFlats` seeded into settings. The worked
+examples in `hint.spec.js` all start this way, and the same URLs are the
+quickest way to look at a route by hand.
 
 ## `genchords.js`
 

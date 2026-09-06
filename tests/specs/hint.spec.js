@@ -1,93 +1,271 @@
 const { test, expect } = require('@playwright/test');
 const H = require('../helpers');
 
-// The hint teaches the route rather than giving the answer, so the one thing it
-// must never do is point somewhere wrong. These drive the real app and read the
-// route back off the board itself — the drawn destination ring is mapped to the
-// cell underneath it, so the arrows are checked against the same hit-targets the
-// game scores against. A mirror of the algorithm would only prove the mirror.
-
-// Which (string, fret) the destination ring is sitting on, and what degree that
-// cell actually carries.
-async function destinationCell(page) {
-  return page.evaluate(() => {
-    const ring = document.querySelector('.hint-dest');
-    if (!ring) return null;
-    const r = ring.getBoundingClientRect();
-    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    for (const c of document.querySelectorAll('.fret-cell')) {
-      const b = c.getBoundingClientRect();
-      if (cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom) {
-        return { string: +c.dataset.string, fret: +c.dataset.fret, degree: c.dataset.degree || null };
-      }
-    }
-    return { string: null, fret: null, degree: null };
-  });
-}
+// The hint answers two questions, and they are checked separately here because
+// the app answers them separately.
+//
+//   WHICH note — decided on what it costs the hand: 1 a fret, 1.1 a string.
+//   HOW to say it — decided on how many moves it takes to explain, where the
+//                   only moves are "slide along this string" and "cross one
+//                   string, one place along 7 3 6 2 5 1 4".
+//
+// Everything below drives the real app and reads the route back off the board
+// itself: each drawn leg is resolved to the cells its two ends sit on, so the
+// arrows are checked against the same hit-targets the game scores against. A
+// mirror of the algorithm would only prove the mirror.
 
 const CYCLE = ['7', '3', '6', '2', '5', '1', '4'];
 
-// Which (string, fret) an SVG element on the board is sitting over, and what
-// degree that cell carries. Everything here is read back off the real board
-// rather than recomputed, so a drawing that disagrees with the game is caught.
-const cellUnder = (page, selector) => page.evaluate((sel) => {
-  const el = document.querySelector(sel);
-  if (!el) return null;
-  const r = el.getBoundingClientRect();
-  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  for (const c of document.querySelectorAll('.fret-cell')) {
-    const b = c.getBoundingClientRect();
-    if (cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom) {
-      return { string: +c.dataset.string, fret: +c.dataset.fret, degree: c.dataset.degree || null };
-    }
-  }
-  return null;
-}, selector);
-
-// The reach as the hint describes it in words: how many strings, which way.
-function parseReach(said) {
-  const m = said.match(/(One string|(\d+) strings) (thinner|thicker)/);
-  if (!m) return null;
-  return { span: m[2] ? +m[2] : 1, dir: m[3] === 'thinner' ? 1 : -1 };
+// Load the app already standing on a chosen note with a chosen question, so one
+// particular route can be looked at rather than played for. Twenty-odd turns of
+// waiting for the game to offer a ♭7 is how the old specs became slow and
+// still missed the cases that mattered.
+async function gotoRoute(page, { at, find, flats = false }) {
+  await H.seedStorage(page, {
+    [H.STORAGE.onboarded]: '1',
+    [H.STORAGE.nudge]: '1',
+    [H.STORAGE.settings]: JSON.stringify({ includeFlats: flats, noteDisplay: 'numerals' }),
+  });
+  await page.goto(`/?at=${at}&find=${find}`);
+  await page.waitForFunction(() => document.querySelectorAll('.fret-cell').length > 0);
 }
-
-const cycleStep = (from, n) => {
-  const i = CYCLE.indexOf(from);
-  return i < 0 ? null : CYCLE[((i + n) % 7 + 7) % 7];
-};
 
 const openHint = async (page) => {
   await page.locator('#hintAskBtn').click();
   await expect(page.locator('#hintPanel')).toBeVisible();
 };
 
-// Several of these walk twenty-odd turns to sample enough routes, which is slow
-// on purpose — the alternative is asserting against a copy of the algorithm.
-test.beforeEach(({}, testInfo) => testInfo.setTimeout(testInfo.timeout * 2));
-
-// The prose only. Diagrams live inside the steps and their SVG labels are text
-// nodes too, so a plain textContent splices "…+1 −1" straight onto the sentence
-// and any number pulled out of it is fiction.
-const stepText = (page) => page.locator('#hintSteps').evaluate((el) => {
-  const clone = el.cloneNode(true);
-  clone.querySelectorAll('svg').forEach((s) => s.remove());
-  return clone.textContent.replace(/\s+/g, ' ').trim();
+// The route as the BOARD draws it: both ends of every leg resolved to the cell
+// underneath, in the order the legs were drawn. Taken from the rendered paths
+// rather than from any state the app kept, so a picture that disagrees with the
+// words is caught rather than papered over.
+const drawnRoute = (page) => page.evaluate(() => {
+  const cellAt = (pt) => {
+    for (const c of document.querySelectorAll('.fret-cell')) {
+      const b = c.getBoundingClientRect();
+      if (pt.x >= b.left && pt.x <= b.right && pt.y >= b.top && pt.y <= b.bottom) {
+        return { string: +c.dataset.string, fret: +c.dataset.fret, degree: c.dataset.degree || null };
+      }
+    }
+    return null;
+  };
+  // SVG user units are not viewport coordinates; the cells are measured in
+  // viewport coordinates. getScreenCTM is the only honest bridge between them.
+  const screenPoint = (path, len) => {
+    const p = path.getPointAtLength(len), m = path.getScreenCTM();
+    return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+  };
+  const legs = [...document.querySelectorAll('.hint-leg')];
+  if (!legs.length) return null;
+  const stops = [cellAt(screenPoint(legs[0], 0))];
+  for (const leg of legs) stops.push(cellAt(screenPoint(leg, leg.getTotalLength())));
+  return stops;
 });
 
-// The slide is worded two ways: normally it names the scale interval and then
-// the move, but when the staging note is outside the key there's no interval to
-// name, so it only counts frets.
-function parseSlide(said) {
-  let m = said.match(/go (up|down) (\d+) fret/);
-  if (m) return { dir: m[1], frets: +m[2] };
-  // Landing in a crack has no scale interval to name, so it reads
-  // "your 4 is the lower one — 1 fret down".
-  m = said.match(/(\d+) frets? (up|down)/);
-  if (m) return { dir: m[2], frets: +m[1] };
-  return null;
+// The prose only. Each step carries its own diagram, and the SVG labels and the
+// strip cells are text nodes too, so a plain textContent splices "7362514"
+// straight onto the sentence and any number pulled out of it is fiction.
+const stepTexts = (page) => page.locator('#hintSteps li').evaluateAll((els) =>
+  els.map((li) => {
+    const clone = li.cloneNode(true);
+    clone.querySelectorAll('svg, .hint-cycle, .hint-formula').forEach((n) => n.remove());
+    return clone.textContent.replace(/\s+/g, ' ').trim();
+  }));
+
+// What the cheapest note of this degree costs the hand from where you stand,
+// in the app's own tenths — a fret 10, a string 11.
+const cheapestPrice = (page, degree, from) => page.evaluate(({ d, s, f }) => {
+  let min = Infinity;
+  for (const c of document.querySelectorAll('.fret-cell')) {
+    if (c.dataset.degree !== d) continue;
+    min = Math.min(min, 10 * Math.abs(+c.dataset.fret - f) + 11 * Math.abs(+c.dataset.string - s));
+  }
+  return min;
+}, { d: degree, s: from.string, f: from.fret });
+
+// Every rule the route promises to keep, checked against one open hint. Called
+// from the sweeps rather than written out per turn, so the sweeps stay about
+// which positions get covered.
+async function expectSoundRoute(page) {
+  const target = await H.currentTarget(page);
+  const stops = await drawnRoute(page);
+  const said = await stepTexts(page);
+
+  expect(stops, 'the route should draw at least one leg').not.toBeNull();
+  for (const st of stops) expect(st, 'every leg end should sit on a board cell').not.toBeNull();
+  // One drawn leg per numbered step, so "step 2" in the panel and the "2" on
+  // the neck are always the same instruction.
+  expect(stops.length - 1, `${said.length} steps but ${stops.length - 1} legs`).toBe(said.length);
+  for (const s of said) expect(s, 'step text').not.toContain('undefined');
+
+  const dest = stops[stops.length - 1];
+  expect(dest.degree, `hint pointed at ${dest.degree}, asked for ${target}`).toBe(target);
+
+  const price = 10 * Math.abs(dest.fret - stops[0].fret) + 11 * Math.abs(dest.string - stops[0].string);
+  expect(price, 'the destination should be a cheapest one for the hand')
+    .toBe(await cheapestPrice(page, target, stops[0]));
+
+  for (let i = 1; i < stops.length; i++) {
+    const a = stops[i - 1], b = stops[i], text = said[i - 1];
+    const dString = b.string - a.string, dFret = b.fret - a.fret;
+
+    if (dString === 0) {
+      // A slide: one string, inside a hand's reach — three frets of travel is
+      // the four-fret box, one finger per fret.
+      expect(Math.abs(dFret), `slide of ${Math.abs(dFret)} frets: "${text}"`).toBeLessThanOrEqual(3);
+      expect(Math.abs(dFret)).toBeGreaterThan(0);
+      expect(text, `a slide should not claim the sequence: "${text}"`).not.toContain('one place along');
+    } else {
+      // A crossing: exactly one string, exactly one place along the sequence,
+      // and level unless the G-B pair forced it across — which it must own.
+      expect(Math.abs(dString), `crossed ${Math.abs(dString)} strings at once: "${text}"`).toBe(1);
+      const from = CYCLE.indexOf(a.degree), to = CYCLE.indexOf(b.degree);
+      expect(from, `crossed off a ${a.degree}, which is not in the sequence`).toBeGreaterThanOrEqual(0);
+      expect(to - from, `${a.degree} to ${b.degree} is not one place along the sequence`)
+        .toBe(dString > 0 ? 1 : -1);
+      // The 4|7 join is a tritone, so it is the one crossing that never happens.
+      expect([a.degree, b.degree].join('')).not.toBe(dString > 0 ? '47' : '74');
+      const overGB = Math.min(a.string, b.string) === 3;
+      expect(dFret, 'a crossing is level unless the G-B pair shifts it')
+        .toBe(overGB ? dString : 0);
+      if (overGB) expect(text, `crossing G-B should name the quirk: "${text}"`).toContain('G–B');
+      else expect(text).toContain('same fret');
+      expect(text).toContain('one place along');
+    }
+  }
+  return { stops, said };
 }
 
 test.describe('the "how do I find it" hint', () => {
+
+  // ---- the worked examples ----
+  // Each of these pins a position and a question, so the assertion is on the
+  // exact advice rather than on whatever the game happened to ask for.
+
+  test('a lowered degree steps onto the degree it is named after, then crosses', async ({ page }) => {
+    // ♭7 on the D string, asked for a 3. Both the 3 a string thinner and the 3
+    // a string thicker cost the hand 2.1, and both take two moves — so what
+    // decides is that a ♭7 is a flattened 7. Going by way of the 6 would be
+    // just as true and would teach nothing.
+    await gotoRoute(page, { at: '2.8', find: '3', flats: true });
+    await openHint(page);
+    const { stops, said } = await expectSoundRoute(page);
+
+    expect(said).toHaveLength(2);
+    expect(said[0]).toMatch(/♭7 is the 7 flattened, so the 7 is 1 fret up/);
+    expect(said[1]).toMatch(/One string thinner, same fret: 7 to 3/);
+    expect(stops).toEqual([
+      { string: 2, fret: 8, degree: 'b7' },
+      { string: 2, fret: 9, degree: '7' },
+      { string: 3, fret: 9, degree: '3' },
+    ]);
+  });
+
+  test('crossing to a lowered degree lands on its natural first', async ({ page }) => {
+    // The same fact read backwards: a 3 asked for a ♭7. The sequence carries
+    // you to the 7, and the ♭ is one fret off it.
+    await gotoRoute(page, { at: '2.2', find: 'b7', flats: true });
+    await openHint(page);
+    const { stops, said } = await expectSoundRoute(page);
+
+    expect(said).toHaveLength(2);
+    expect(said[0]).toMatch(/One string thicker, same fret: 3 to 7/);
+    expect(said[1]).toMatch(/♭7 is this 7 flattened — 1 fret down/);
+    expect(stops).toEqual([
+      { string: 2, fret: 2, degree: '3' },
+      { string: 1, fret: 2, degree: '7' },
+      { string: 1, fret: 1, degree: 'b7' },
+    ]);
+  });
+
+  test('a note two frets away is a slide, not a trip round the sequence', async ({ page }) => {
+    // A 5 asked for a 4. The sequence could get there, but two frets down the
+    // string is one move and costs the hand less than crossing anywhere.
+    await gotoRoute(page, { at: '2.5', find: '4' });
+    await openHint(page);
+    const { stops, said } = await expectSoundRoute(page);
+
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/5 to 4 is a whole step — go down 2 frets/);
+    expect(stops).toEqual([
+      { string: 2, fret: 5, degree: '5' },
+      { string: 2, fret: 3, degree: '4' },
+    ]);
+  });
+
+  test('the G-B pair is one move, with the quirk named', async ({ page }) => {
+    // 5 on the G string to 1 on the B string. It costs the hand 2.1 rather than
+    // 1.1 because the pair is tuned a third — but it is still one place along
+    // the sequence, so it stays one step to explain.
+    await gotoRoute(page, { at: '3.12', find: '1' });
+    await openHint(page);
+    const { stops, said } = await expectSoundRoute(page);
+
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/One string thinner, 1 fret up across the G–B pair: 5 to 1/);
+    expect(stops).toEqual([
+      { string: 3, fret: 12, degree: '5' },
+      { string: 4, fret: 13, degree: '1' },
+    ]);
+    await expect(page.locator('#hintWarn')).toContainText('G→B');
+  });
+
+  test('leaving a 7 towards a thicker string steps off the sequence first', async ({ page }) => {
+    // 7 to 4 is the tritone, so there is no crossing to make. The advice is to
+    // step onto the 1 or the 6 and cross from there — and both are offered,
+    // because next time round the other one will be the near one.
+    await gotoRoute(page, { at: '3.4', find: '5' });
+    await openHint(page);
+    const { stops, said } = await expectSoundRoute(page);
+
+    expect(said).toHaveLength(2);
+    expect(said[0]).toMatch(/The 7–4 join is the one the sequence can't make/);
+    expect(said[0]).toMatch(/step off the 7 first: the 1 is 1 fret up \(the 6 would do too\)/);
+    expect(said[1]).toMatch(/One string thicker, same fret: 1 to 5/);
+    expect(stops).toEqual([
+      { string: 3, fret: 4, degree: '7' },
+      { string: 3, fret: 5, degree: '1' },
+      { string: 2, fret: 5, degree: '5' },
+    ]);
+    await expect(page.locator('.hint-branch')).toHaveCount(1);
+    await expect(page.locator('#hintWarn')).toContainText('tritone');
+  });
+
+  test('leaving a 4 towards a thinner string does the same, mirrored', async ({ page }) => {
+    await gotoRoute(page, { at: '2.3', find: '6' });
+    await openHint(page);
+    const { stops, said } = await expectSoundRoute(page);
+
+    expect(said).toHaveLength(2);
+    expect(said[0]).toMatch(/The 4–7 join is the one the sequence can't make/);
+    expect(said[0]).toMatch(/step off the 4 first: the 3 is 1 fret down \(the 5 would do too\)/);
+    expect(said[1]).toMatch(/One string thinner, same fret: 3 to 6/);
+    expect(stops).toEqual([
+      { string: 2, fret: 3, degree: '4' },
+      { string: 2, fret: 2, degree: '3' },
+      { string: 3, fret: 2, degree: '6' },
+    ]);
+    await expect(page.locator('.hint-branch')).toHaveCount(1);
+  });
+
+  // The fork is the only figure that has to agree with the neck's geometry:
+  // fret numbers grow downward, so its top branch must be the LOWER fret.
+  // Getting this backwards is invisible unless the two are compared.
+  test('the fork is stacked the same way up as the neck', async ({ page }) => {
+    await gotoRoute(page, { at: '3.4', find: '5' });
+    await openHint(page);
+
+    // Boxes are emitted solo, top, bottom.
+    const labels = await page.locator('.hint-branch text').allTextContents();
+    expect(labels[0], 'the solo box is the degree you are leaving').toBe('7');
+    const degAt = (fret) => page.evaluate((f) => document.querySelector(
+      `.fret-cell[data-string="3"][data-fret="${f}"]`)?.dataset.degree || null, fret);
+    expect(labels[1], 'top branch should be the lower fret').toBe(await degAt(2));
+    expect(labels[2], 'bottom branch should be the higher fret').toBe(await degAt(5));
+  });
+
+  // ---- the rules, over whatever the game deals ----
+
   test('offers itself by naming the degree being asked for', async ({ page }) => {
     await H.gotoPlaying(page);
     const target = await H.currentTarget(page);
@@ -95,324 +273,85 @@ test.describe('the "how do I find it" hint', () => {
     await expect(page.locator('#hintAskBtn')).toContainText('How do I find');
   });
 
-  test('points at a cell that really is the target degree', async ({ page }) => {
+  test('every route it draws obeys the two moves it is made of', async ({ page }) => {
+    test.setTimeout(test.info().timeout * 2);
     await H.gotoPlaying(page);
 
-    // Several turns, since the route depends on where you're standing.
-    for (let i = 0; i < 6; i++) {
-      const target = await H.currentTarget(page);
+    // Walked around the neck deliberately rather than left to chance: the
+    // routes that break are the ones near the two seams and the two ends, and
+    // playing at random parks you on the inner strings.
+    for (let i = 0; i < 14; i++) {
       await openHint(page);
-
-      const dest = await destinationCell(page);
-      expect(dest, 'destination ring should sit on a board cell').not.toBeNull();
-      expect(dest.degree, `hint pointed at ${dest.degree}, asked for ${target}`).toBe(target);
-      expect(dest.fret).toBeGreaterThanOrEqual(0);
-      expect(dest.fret).toBeLessThanOrEqual(15);
-
-      await page.locator('#hintCloseBtn').click();
-      await H.tapDegree(page, target);
-    }
-  });
-
-  test('the route it draws is the route it describes', async ({ page }) => {
-    await H.gotoPlaying(page);
-
-    // Only cross-string routes draw a staging ring, and which kind you get
-    // depends on where the game has put you — so loop until enough of them turn
-    // up rather than hoping the first turn is the interesting one.
-    let crossChecked = 0;
-    for (let i = 0; i < 10 && crossChecked < 3; i++) {
-      await openHint(page);
-
-      const stop = await page.evaluate(() => {
-        const ring = document.querySelector('.hint-stop');
-        if (!ring) return null;
-        const r = ring.getBoundingClientRect();
-        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        for (const c of document.querySelectorAll('.fret-cell')) {
-          const b = c.getBoundingClientRect();
-          if (cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom) {
-            return { string: +c.dataset.string, fret: +c.dataset.fret };
-          }
-        }
-        return null;
-      });
-
-      if (stop) {
-        const said = await stepText(page);
-        const dest = await destinationCell(page);
-        const slide = parseSlide(said);
-        expect(slide, `a staged route should describe a slide: "${said}"`).not.toBeNull();
-
-        // The slide runs along one string, so the staging post and the
-        // destination must share it.
-        expect(dest.string).toBe(stop.string);
-        // Fret numbers rise away from the nut in both orientations, so "up"
-        // has to mean a higher fret number.
-        const delta = dest.fret - stop.fret;
-        expect(Math.abs(delta)).toBe(slide.frets);
-        expect(delta > 0 ? 'up' : 'down').toBe(slide.dir);
-        crossChecked++;
-      }
-
-      await page.locator('#hintCloseBtn').click();
-      await H.tapDegree(page, await H.currentTarget(page));
-    }
-    expect(crossChecked, 'expected some cross-string routes in 10 turns').toBeGreaterThan(0);
-  });
-
-  test('reaches across more than one string when that is the shorter move', async ({ page }) => {
-    await H.gotoPlaying(page);
-
-    // Two- and three-string reaches used to be a fifth of all routes; pricing
-    // by what a route costs to work out dropped them to 4%, which is the point
-    // — a further reach is another step along the sequence to compute. That
-    // makes "wait for one to turn up" unreliable, and no starting position
-    // forces one, so this no longer demands to see one. What it does check runs
-    // on every turn: the span is never absurd, exactly one diagram is drawn,
-    // and a multi-string reach shows the places it passes through.
-    const spans = new Set();
-    for (let i = 0; i < 20; i++) {
-      await openHint(page);
-      const span = await page.evaluate(() => {
-        const cellAt = (el) => {
-          const r = el.getBoundingClientRect();
-          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-          for (const c of document.querySelectorAll('.fret-cell')) {
-            const b = c.getBoundingClientRect();
-            if (cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom) return c;
-          }
-          return null;
-        };
-        const dest = cellAt(document.querySelector('.hint-dest'));
-        const stop = document.querySelector('.hint-stop');
-        const land = stop ? cellAt(stop) : dest;
-        return land ? +land.dataset.string : null;
-      });
-      const said = await stepText(page);
-      const m = said.match(/(One string|(\d+) strings) (thinner|thicker)/);
-      if (m) {
-        const claimed = m[2] ? +m[2] : 1;
-        spans.add(claimed);
-        expect(claimed).toBeLessThanOrEqual(3);
-        if (claimed > 1) {
-          expect(said).toContain('7 3 6 2 5 1 4');
-          // Exactly one diagram per reach: the sequence normally, or the fork
-          // when an edge case means the sequence is the thing that doesn't
-          // apply. Never both, never neither.
-          const cycles = await page.locator('.hint-cycle').count();
-          const forks = await page.locator('.hint-branch').count();
-          expect(cycles + forks, `expected one diagram, got ${cycles} cycle + ${forks} fork`).toBe(1);
-          if (cycles) {
-            // A multi-string reach has to show the places it passes through.
-            await expect(page.locator('.hint-cycle span.via')).toHaveCount(claimed - 1);
-          }
-        }
-        // Landing between two degrees is an edge case, not a dead end, so it
-        // must always name the pair and never just report a failure.
-        if (/gap between/.test(said)) {
-          expect(said).toMatch(/gap between the .+ and the /);
-          await expect(page.locator('#hintWarn')).toBeVisible();
-        }
-      }
-      expect(span, 'route should land on a real string').not.toBeNull();
-      await page.locator('#hintCloseBtn').click();
-      await H.tapDegree(page, await H.currentTarget(page), { onString: i % 2 ? 5 : 0 });
-    }
-    expect(spans.size, 'expected some cross-string reaches').toBeGreaterThan(0);
-  });
-
-  test('the route always pauses on the degree the sequence names', async ({ page }) => {
-    await H.gotoPlaying(page);
-
-    // The rule that keeps the hint teaching something transferable: the stop is
-    // the sequence's next degree, wherever the neck has put it. Crossing G→B
-    // displaces that degree by a fret, and describing whatever sits level with
-    // you instead states a coincidence — "one string thinner from a 5 is the 7"
-    // holds across G→B and nowhere else. The single exception is the tritone
-    // fork, where no such degree exists to reach.
-    let reaches = 0, displaced = 0;
-    for (let i = 0; i < 24; i++) {
-      await openHint(page);
-      const said = await stepText(page);
-      const reach = parseReach(said);
-
-      if (reach) {
-        reaches++;
-        // The reach sets off from wherever the route is standing when it
-        // crosses — which is the stepped-onto degree when it stepped onto the
-        // sequence first, not the degree on the plaque. Reading the plaque
-        // instead made this skip every lowered-degree route silently.
-        const stepOn = said.match(/step onto the (♭?\d) first/);
-        const origin = stepOn ? stepOn[1].replace('♭', 'b')
-          : (await page.locator('#curNum').textContent()).replace('♭', 'b');
-        const expected = cycleStep(origin, reach.dir * reach.span);
-
-        // With a leading step there are two pauses drawn; the reach's landing
-        // is the one on the destination's string.
-        const markers = await page.evaluate(() => {
-          const out = [];
-          for (const el of document.querySelectorAll('.hint-stop, .hint-dest')) {
-            const r = el.getBoundingClientRect();
-            const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-            for (const c of document.querySelectorAll('.fret-cell')) {
-              const b = c.getBoundingClientRect();
-              if (cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom) {
-                out.push({ dest: el.classList.contains('hint-dest'),
-                           string: +c.dataset.string, fret: +c.dataset.fret,
-                           degree: c.dataset.degree || null });
-                break;
-              }
-            }
-          }
-          return out;
-        });
-        const destMark = markers.find((m) => m.dest);
-        expect(destMark, 'the route should draw a destination').not.toBeUndefined();
-        const stop = markers.find((m) => !m.dest && m.string === destMark.string) || destMark;
-
-        if (await page.locator('.hint-branch').count()) {
-          // A fork stays level, in the crack — there is no degree to stop on.
-          expect(stop.degree, `fork should stop in a gap, found ${stop.degree}`).toBeNull();
-        } else if (/the sequence promises/.test(said)) {
-          // The route says outright that the sequence didn't deliver here. That
-          // is allowed — reaching level onto the target beats a two-fret detour
-          // to the sequence's degree and back — but then the stop obviously
-          // isn't the sequence's degree, so there's nothing to check.
-          expect(said).toMatch(/not the .+ the sequence promises/);
-        } else if (expected) {
-          // Within a couple of frets of the ends the sequence's degree can fall
-          // off the neck entirely — measured, that's frets 0, 1, 14 and 15 only.
-          // There the route honestly describes whatever is level instead, so
-          // the rule can only be asserted where the degree is actually there.
-          const inReach = await page.evaluate(({ s, f, d }) => {
-            for (let n = -2; n <= 2; n++) {
-              const c = document.querySelector(`.fret-cell[data-string="${s}"][data-fret="${f + n}"]`);
-              if (c && c.dataset.degree === d) return true;
-            }
-            return false;
-          }, { s: stop.string, f: stop.fret, d: expected });
-
-          if (inReach) {
-            expect(stop.degree,
-              `from a ${origin}, ${reach.span} string(s) ${reach.dir === 1 ? "thinner" : "thicker"}: ` +
-              `sequence says ${expected}, route stopped on ${stop.degree}`).toBe(expected);
-            if (/rather than level/.test(said)) displaced++;
-          }
-        }
-      }
-
+      await expectSoundRoute(page);
       await page.locator('#hintCloseBtn').click();
       await H.tapDegree(page, await H.currentTarget(page), { onString: i % 6 });
     }
-    expect(reaches, 'expected some cross-string reaches').toBeGreaterThan(4);
-    // Roughly a third of reaches are displaced by a seam, so seeing none would
-    // mean the displaced path is dead rather than merely unlucky.
-    expect(displaced, 'expected some seam-displaced stops in 24 turns').toBeGreaterThan(0);
   });
 
-  test('the edge-case fork is stacked the same way up as the neck', async ({ page }) => {
-    await H.gotoPlaying(page);
+  test('the same rules hold with lowered degrees switched on', async ({ page }) => {
+    test.setTimeout(test.info().timeout * 2);
+    await H.seedStorage(page, {
+      [H.STORAGE.onboarded]: '1',
+      [H.STORAGE.nudge]: '1',
+      [H.STORAGE.settings]: JSON.stringify({ includeFlats: true, noteDisplay: 'numerals' }),
+    });
+    await page.goto('/');
+    await page.waitForFunction(() => document.querySelectorAll('.fret-cell').length > 0);
 
-    // Fret numbers grow downward on the neck, so the figure's top branch has to
-    // be the LOWER fret. Checked against the board rather than against pitch —
-    // getting this backwards is invisible unless you compare the two.
-    //
-    // The fork only appears on the 4-to-7 join, so park on a 4 or a 7 first
-    // rather than waiting for one to come round: that lifts the rate from 10%
-    // of turns to 29%, and twenty samples puts a run with none at about 1 in
-    // 800. Playing at random needed 26 turns for a 1-in-4 chance of failing.
-    let checked = 0;
-    for (let i = 0; i < 20 && checked < 2; i++) {
-      await H.playUntilTargetIn(page, ['4', '7']);
+    // A lowered degree has no place in the sequence, so the one thing that must
+    // never happen is a route claiming it took a step along it from a ♭.
+    let fromLowered = 0;
+    for (let i = 0; i < 14; i++) {
+      const cur = (await page.locator('#curNum').textContent()).replace('♭', 'b');
       await openHint(page);
-
-      if (await page.locator('.hint-branch').count()) {
-        const stop = await page.evaluate(() => {
-          const ring = document.querySelector('.hint-stop') || document.querySelector('.hint-dest');
-          const r = ring.getBoundingClientRect();
-          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-          for (const c of document.querySelectorAll('.fret-cell')) {
-            const b = c.getBoundingClientRect();
-            if (cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom) {
-              return { string: +c.dataset.string, fret: +c.dataset.fret };
-            }
-          }
-          return null;
-        });
-        expect(stop).not.toBeNull();
-
-        // Boxes are emitted solo, top, bottom — so these are the two branches.
-        const labels = await page.locator('.hint-branch text').allTextContents();
-        const [top, bottom] = [labels[1], labels[2]];
-        const degAt = (fret) => page.evaluate(
-          ({ s, f }) => document.querySelector(
-            `.fret-cell[data-string="${s}"][data-fret="${f}"]`)?.dataset.degree || null,
-          { s: stop.string, f: fret });
-
-        expect(top, 'top branch should be the fret above').toBe(await degAt(stop.fret - 1));
-        expect(bottom, 'bottom branch should be the fret below').toBe(await degAt(stop.fret + 1));
-
-        // And the pair must be one of the exactly two rules worth memorising.
-        // A longer reach can cross the same join but carry the error onward and
-        // land somewhere that isn't the pair — showing the fork there would
-        // teach something false, so it must not appear.
-        const said = await stepText(page);
-        const dir = parseReach(said).dir;
-        expect([top, bottom], `fork drew ${top}/${bottom} going ${dir === 1 ? 'thinner' : 'thicker'}`)
-          .toEqual(dir === 1 ? ['6', '7'] : ['4', '5']);
-        checked++;
-      }
-
-      await page.locator('#hintCloseBtn').click();
-    }
-    expect(checked, 'expected some edge-case forks while standing on 4s and 7s').toBeGreaterThan(0);
-  });
-
-  test('calls out the G-to-B gap when the route crosses it', async ({ page }) => {
-    await H.gotoPlaying(page);
-
-    // Play until a hint whose cross-string move spans the G/B pair, then check
-    // it warns rather than quietly being a fret out.
-    let sawGap = false;
-    for (let i = 0; i < 14 && !sawGap; i++) {
-      await openHint(page);
-      const crosses = await page.evaluate(() => {
-        const stop = document.querySelector('.hint-stop') || document.querySelector('.hint-dest');
-        const leg = document.querySelector('.hint-leg');
-        if (!leg || !stop) return false;
-        const r = stop.getBoundingClientRect();
-        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        let landedString = null;
-        for (const c of document.querySelectorAll('.fret-cell')) {
-          const b = c.getBoundingClientRect();
-          if (cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom) landedString = +c.dataset.string;
-        }
-        const cur = window.__curString;
-        return { landedString };
-      });
-      const warned = await page.locator('#hintWarn').isVisible();
-      if (warned) {
-        const text = await page.locator('#hintWarn').textContent();
-        // Whichever variant fires, it has to name one of the two odd joins —
-        // the tuning's G→B pair or the sequence's 4-to-7 — and never be a bare
-        // "that didn't work".
-        expect(text).toMatch(
-          /G→B|4-to-7|one string lighter always lands|one string heavier always lands/i);
-        sawGap = true;
+      const { said } = await expectSoundRoute(page);
+      const warn = await page.locator('#hintWarn').isVisible()
+        ? await page.locator('#hintWarn').textContent() : '';
+      expect(warn, 'warning text').not.toContain('undefined');
+      if (cur.startsWith('b')) {
+        fromLowered++;
+        expect(said[0], `claimed a sequence step straight off a ${cur}`)
+          .not.toContain('one place along');
       }
       await page.locator('#hintCloseBtn').click();
-      await H.tapDegree(page, await H.currentTarget(page));
+      await H.tapDegree(page, await H.currentTarget(page), { onString: i % 6 });
     }
-    // Roughly a quarter of routes hit an exception, so 14 turns without one
-    // would be a signal the warning path is dead rather than merely unlucky.
-    expect(sawGap, 'expected at least one exception warning in 14 turns').toBe(true);
+    // Roughly a third of degrees are lowered once they are enabled, so seeing
+    // none would mean this never exercised the path it exists for.
+    expect(fromLowered, 'expected some turns starting on a lowered degree').toBeGreaterThan(1);
   });
+
+  test('each crossing shows the sequence, each slide shows the formula', async ({ page }) => {
+    await H.gotoPlaying(page);
+
+    // One picture per move, and the right one: the sequence for a crossing, the
+    // major scale for a slide, the fork for the join that has neither.
+    for (let i = 0; i < 8; i++) {
+      await openHint(page);
+      const kinds = await page.locator('#hintSteps li').evaluateAll((els) => els.map((li) => ({
+        crosses: /one place along/.test(li.textContent),
+        cycle: !!li.querySelector('.hint-cycle'),
+        formula: !!li.querySelector('.hint-formula'),
+        fork: !!li.querySelector('.hint-branch'),
+      })));
+      for (const k of kinds) {
+        expect(k.cycle, 'the sequence strip belongs to crossings and only crossings')
+          .toBe(k.crosses);
+        expect(k.formula && k.crosses, 'a crossing never shows the scale formula').toBe(false);
+        expect(k.fork && k.crosses, 'a crossing never shows the fork').toBe(false);
+      }
+      await page.locator('#hintCloseBtn').click();
+      await H.tapDegree(page, await H.currentTarget(page), { onString: i % 6 });
+    }
+  });
+
+  // ---- the panel as a thing on screen ----
 
   // The route is drawn into groups that sit ABOVE the hit cells, so anything
   // with a fill in it can swallow the tap the hint just told you to make.
-  // Rings are fill:none and let clicks through, which is why this went unnoticed
-  // — but Dots and Hidden mode add an opaque labelled disc right on the target.
+  // Rings are fill:none and let clicks through, which is why this went
+  // unnoticed — but Dots and Hidden mode add an opaque labelled disc right on
+  // the target.
   for (const mode of ['numerals', 'dots', 'hidden']) {
     test(`the target stays tappable with the hint open (${mode})`, async ({ page }) => {
       await H.seedStorage(page, {
@@ -424,7 +363,8 @@ test.describe('the "how do I find it" hint', () => {
       await page.waitForFunction(() => document.querySelectorAll('.fret-cell').length > 0);
 
       await openHint(page);
-      const dest = await destinationCell(page);
+      const stops = await drawnRoute(page);
+      const dest = stops[stops.length - 1];
 
       // Tap the very cell the route points at — no force, so an interception
       // fails the test rather than being papered over.
@@ -470,69 +410,10 @@ test.describe('the "how do I find it" hint', () => {
       expect(labelled.length, 'every stop on the route should be named').toBeGreaterThan(0);
       for (const stop of labelled) {
         expect(stop.label, 'a named stop must carry a label').not.toBeNull();
-        // A stop in a crack has no degree of its own; every other one must say
-        // exactly what the board says it is.
         if (stop.degree) expect(stop.label.replace('♭', 'b')).toBe(stop.degree);
       }
     });
   }
-
-  // Lowered degrees are a whole configuration the hint had never been run in,
-  // and it showed: it printed "not the undefined the sequence promises", and
-  // blamed the 4-to-7 join on every single route. A ♭6 has no place in the
-  // sequence, so neither claim could ever be true.
-  test('lowered degrees: steps onto the sequence before reaching across', async ({ page }) => {
-    await H.seedStorage(page, {
-      [H.STORAGE.onboarded]: '1',
-      [H.STORAGE.nudge]: '1',
-      [H.STORAGE.settings]: JSON.stringify({ includeFlats: true, noteDisplay: 'numerals' }),
-    });
-    await page.goto('/');
-    await page.waitForFunction(() => document.querySelectorAll('.fret-cell').length > 0);
-
-    let fromLowered = 0, steppedOn = 0;
-    for (let i = 0; i < 22; i++) {
-      const cur = (await page.locator('#curNum').textContent()).replace('♭', 'b');
-      await openHint(page);
-      const said = await stepText(page);
-      const warn = await page.locator('#hintWarn').isVisible()
-        ? await page.locator('#hintWarn').textContent() : '';
-
-      // Nothing may leak a missing value into the copy, ever.
-      expect(said, 'step text').not.toContain('undefined');
-      expect(warn, 'warning text').not.toContain('undefined');
-
-      if (cur.startsWith('b')) {
-        fromLowered++;
-        const m = said.match(/step onto the (♭?\d) first: (\d+) frets? (up|down)/);
-
-        // The sequence may only be claimed from a degree that's in it. Stepping
-        // onto one first earns that right; reaching straight off a ♭ degree
-        // does not.
-        if (!m) {
-          expect(said, `claimed sequence steps from a ${cur}`).not.toContain('steps along');
-        }
-
-        if (m) {
-          steppedOn++;
-          // The degree it says to step onto must be natural — that's the whole
-          // point — and must really be where the route pauses.
-          expect(m[1], 'stepped onto another lowered degree').not.toContain('♭');
-          const stop = await cellUnder(page, '.hint-stop');
-          expect(stop, 'a stepped route should draw its pause').not.toBeNull();
-          expect(stop.degree).toBe(m[1]);
-        }
-      }
-
-      await page.locator('#hintCloseBtn').click();
-      await H.tapDegree(page, await H.currentTarget(page), { onString: i % 6 });
-    }
-
-    // Roughly a third of degrees are lowered once they're enabled, so seeing
-    // none would mean this test never exercised the path it exists for.
-    expect(fromLowered, 'expected some turns starting on a lowered degree').toBeGreaterThan(2);
-    expect(steppedOn, 'expected some routes to step onto the sequence first').toBeGreaterThan(0);
-  });
 
   test('clears itself once the answer is given', async ({ page }) => {
     await H.gotoPlaying(page);
@@ -591,9 +472,9 @@ test.describe('the "how do I find it" hint', () => {
   });
 
   test('survives the board being rebuilt underneath it', async ({ page }) => {
-    await H.gotoPlaying(page);
+    await gotoRoute(page, { at: '2.8', find: '3', flats: true });
     await openHint(page);
-    const before = await destinationCell(page);
+    const before = await drawnRoute(page);
 
     // A resize rebuilds every group on the board, including the hint's own.
     const vp = page.viewportSize();
@@ -601,9 +482,7 @@ test.describe('the "how do I find it" hint', () => {
     await page.waitForTimeout(400);
 
     await expect(page.locator('.hint-dest')).toHaveCount(1);
-    const after = await destinationCell(page);
-    expect(after.string).toBe(before.string);
-    expect(after.fret).toBe(before.fret);
+    expect(await drawnRoute(page)).toEqual(before);
   });
 
   test('a key change takes the stale route down with it', async ({ page }) => {
