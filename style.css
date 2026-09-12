@@ -257,11 +257,46 @@
   .hint-ask:active{ background:var(--panel-3); }
   .hint-ask[hidden]{ display:none; }
 
+  /* The plaques restated in one line, shown only while the hint is open. The
+     two numbers are worth keeping — the panel's steps are relative to them —
+     but 91px of tiles is a lot of neck to spend on repeating what the panel
+     already says, and the Time Attack tile can't be used from this state at
+     all. Same two colours as the plaques it stands in for, so it reads as the
+     same fact said shorter. */
+  .plaque-line{
+    display:none; flex:0 0 auto; margin:0; padding:10px 16px 8px;
+    font-size:12.5px; color:var(--muted);
+  }
+  .plaque-line b{
+    font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+    font-size:14px; font-weight:600;
+  }
+  .plaque-line b.live{ color:var(--live); }
+  .plaque-line b.seek{ color:var(--seek); }
+  body.hint-open .plaques{ display:none; }
+  body.hint-open .plaque-line{ display:block; }
+
   .hint-panel{
     background:var(--panel-2); border:1px solid var(--seek); border-radius:10px;
     padding:11px 13px 10px;
+    /* The panel grows with the route and the neck below it was paying for that:
+       four steps plus the footnote measures 443px, which on a 664px phone left
+       the board 58px — dashed arrows drawn across a neck nobody can see. So the
+       panel is capped at whatever is left once the header, the one-line plaques
+       and the neck's own share are paid for, and scrolls inside the cap instead
+       of pushing. Capped rather than the board floored on purpose: a max-height
+       here can't make the column overflow, whereas a min-height down there
+       would clip the moment the settings drawer opened too.
+       Tall phones never meet this — 880px leaves 580px, which fits the longest
+       route there is — so it costs nothing wherever there is room. */
+    display:flex; flex-direction:column; min-height:0;
+    max-height:max(190px, calc(100dvh - 300px));
   }
   .hint-panel[hidden]{ display:none; }
+  /* Only the steps scroll. The button below them is the way out of the panel,
+     so it must not be something you have to go looking for. */
+  .hint-body{ min-height:0; overflow-y:auto; scrollbar-width:none; }
+  .hint-body::-webkit-scrollbar{ display:none; }
 
   /* Each diagram sits inside the step it explains, indented under that step's
      number — so one move is one number, whether you read the words or the
@@ -341,7 +376,7 @@
   .hint-alt b{ color:var(--muted); font-weight:600; }
   .hint-alt[hidden]{ display:none; }
   .hint-close{
-    display:block; width:100%; margin-top:10px; cursor:pointer;
+    display:block; flex:0 0 auto; width:100%; margin-top:10px; cursor:pointer;
     background:none; border:1px solid var(--line-strong); border-radius:8px;
     color:var(--muted); font-family:inherit; font-size:12px; padding:7px 10px;
   }
@@ -929,6 +964,12 @@
     .side .settings-inner{ padding:18px 0 0; gap:16px; }
     .side .setting-row{ font-size:12.5px; }
     .side .restart-btn{ width:100%; text-align:center; }
+
+    /* The rail scrolls as a whole and is nowhere near the neck, so neither
+       the cap nor the one-line plaques have anything to fix here. */
+    .hint-panel{ max-height:none; }
+    body.hint-open .plaques{ display:flex; }
+    body.hint-open .plaque-line{ display:none; }
 
     .board-area{ padding:18px 24px; }
   }

@@ -423,6 +423,75 @@ test.describe('the "how do I find it" hint', () => {
 
   // ---- the panel as a thing on screen ----
 
+  // The longest route the app can produce, which is what the panel has to be
+  // sized against: four steps and the G-B footnote, 443px of panel. It used to
+  // take that out of the neck — 58px of board on a 664px phone, 10px on a
+  // 568px one — so the arrows were drawn across a neck that wasn't there.
+  const WORST = { at: '5.4', find: '1', flats: true };
+
+  for (const height of [568, 664, 880]) {
+    test(`the neck keeps its share of a ${height}px phone`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height });
+      await gotoRoute(page, WORST);
+      await openHint(page);
+      const m = await page.evaluate(() => {
+        const h = (s) => Math.round(document.querySelector(s).getBoundingClientRect().height);
+        const body = document.querySelector('#hintBody');
+        const btn = document.querySelector('#hintCloseBtn').getBoundingClientRect();
+        const app = document.querySelector('.app').getBoundingClientRect();
+        return { board: h('.board-area'), panel: h('#hintPanel'),
+          overflows: Math.round(app.bottom) < Math.round(btn.bottom),
+          // Only the steps scroll, so the way out of the panel is always there
+          // to be tapped rather than something to go hunting for.
+          btnInView: btn.top >= app.top && btn.bottom <= app.bottom + 1,
+          bodyScrolls: body.scrollHeight > body.clientHeight + 1 };
+      });
+      expect(m.board, `board was ${m.board}px on a ${height}px phone`).toBeGreaterThanOrEqual(180);
+      expect(m.btnInView, 'Got it should not need scrolling to reach').toBe(true);
+      expect(m.overflows, 'the panel should cap rather than overflow the app').toBe(false);
+      // Where there is room the cap is never met, so nothing scrolls that
+      // didn't have to — the tall phone gets the whole route in one read.
+      expect(m.bodyScrolls, `${height}px phone`).toBe(height < 800);
+    });
+  }
+
+  // 91px of tiles, restating what the panel says, in front of a button that
+  // can't be used from this state — the cheapest height on the screen.
+  test('the plaques give up their height to the panel, saying the same thing', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 664 });
+    await gotoRoute(page, { at: '3.4', find: '5' });
+
+    const shown = (sel) => page.evaluate((s) =>
+      getComputedStyle(document.querySelector(s)).display !== 'none', sel);
+    expect(await shown('.plaques'), 'the plaques stand until the hint is asked for').toBe(true);
+    expect(await shown('#plaqueLine')).toBe(false);
+
+    await openHint(page);
+    expect(await shown('.plaques')).toBe(false);
+    expect(await shown('#plaqueLine')).toBe(true);
+    // The same two degrees the tiles were showing, or the line is a lie the
+    // steps are then written against.
+    expect(await page.locator('#plaqueLine').textContent())
+      .toMatch(/Current\s+7,\s+finding\s+5/);
+
+    await page.locator('#hintCloseBtn').click();
+    expect(await shown('.plaques'), 'and they come back with the panel gone').toBe(true);
+    expect(await shown('#plaqueLine')).toBe(false);
+  });
+
+  // The rail is 292px of column beside the neck and scrolls as a whole, so it
+  // has neither problem — and the plaques are most of what it is.
+  test('the desktop rail keeps its plaques and its uncapped panel', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoRoute(page, WORST);
+    await openHint(page);
+    expect(await page.evaluate(() => ({
+      plaques: getComputedStyle(document.querySelector('.plaques')).display !== 'none',
+      line: getComputedStyle(document.querySelector('#plaqueLine')).display !== 'none',
+      cap: getComputedStyle(document.querySelector('#hintPanel')).maxHeight,
+    }))).toEqual({ plaques: true, line: false, cap: 'none' });
+  });
+
   // The route is drawn into groups that sit ABOVE the hit cells, so anything
   // with a fill in it can swallow the tap the hint just told you to make.
   // Rings are fill:none and let clicks through, which is why this went

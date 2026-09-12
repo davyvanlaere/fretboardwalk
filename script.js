@@ -85,6 +85,8 @@
   const hintAltEl       = document.getElementById('hintAlt');
   const hintCostEl      = document.getElementById('hintCost');
   const hintCloseBtnEl  = document.getElementById('hintCloseBtn');
+  const plaqueLineCurEl = document.getElementById('plaqueLineCur');
+  const plaqueLineTgtEl = document.getElementById('plaqueLineTgt');
   const taBarTrackEl    = document.getElementById('taBarTrack');
   const taBarFillEl     = document.getElementById('taBarFill');
   const taStartBtnEl    = document.getElementById('taStartBtn');
@@ -1178,6 +1180,10 @@
     setPlaque(curNumEl, curRomanEl, curDeg);
     setPlaque(tgtNumEl, tgtRomanEl, state.targetDegree);
     hintAskDegEl.textContent = DEGREE_LABEL[state.targetDegree] || '';
+    // The one-line stand-in for the plaques says the same two numbers, so it is
+    // filled from the same place rather than kept in step by hand.
+    plaqueLineCurEl.textContent = DEGREE_LABEL[curDeg] || '';
+    plaqueLineTgtEl.textContent = DEGREE_LABEL[state.targetDegree] || '';
   }
 
   // The sequence with this one crossing lit on it: the string of digits from
@@ -1474,6 +1480,10 @@
     drawHintRoute(r);
     hintPanelEl.hidden = false;
     hintAskBtnEl.hidden = true;
+    // Hands the plaques' height to the panel and the neck for as long as the
+    // panel is up. CSS decides what that means per layout: the phone swaps the
+    // tiles for one line, the desktop rail keeps them.
+    document.body.classList.add('hint-open');
     // Both ends of the route have to be on screen for the arrows to mean
     // anything, so centre between them rather than on either one.
     centerOn(r.dest.string, Math.round((r.from.fret + r.dest.fret) / 2));
@@ -1487,6 +1497,7 @@
     clearHintRoute();
     hintPanelEl.hidden = true;
     hintAskBtnEl.hidden = false;
+    document.body.classList.remove('hint-open');
   }
 
   // ---------- settings ----------
