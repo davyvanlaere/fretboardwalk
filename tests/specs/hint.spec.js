@@ -16,6 +16,9 @@ const H = require('../helpers');
 
 const CYCLE = ['7', '3', '6', '2', '5', '1', '4'];
 
+// How the panel counts strings and sequence steps, which are the same count.
+const COUNT = ['', 'One', 'Two', 'Three', 'Four', 'Five'];
+
 // Load the app already standing on a chosen note with a chosen question, so one
 // particular route can be looked at rather than played for. Twenty-odd turns of
 // waiting for the game to offer a ♭7 is how the old specs became slow and
@@ -105,6 +108,9 @@ async function expectSoundRoute(page) {
   expect(price, 'the destination should be a cheapest one for the hand')
     .toBe(await cheapestPrice(page, target, stops[0]));
 
+  // The direction of the crossing the previous leg made, 0 if it was a
+  // slide — so a run told as two legs instead of one is caught.
+  let prevCross = 0;
   for (let i = 1; i < stops.length; i++) {
     const a = stops[i - 1], b = stops[i], text = said[i - 1];
     const dString = b.string - a.string, dFret = b.fret - a.fret;
@@ -118,25 +124,36 @@ async function expectSoundRoute(page) {
       // if pricing ever drifts, this is where it shows up.
       expect(Math.abs(dFret), `slide of ${Math.abs(dFret)} frets: "${text}"`).toBeLessThanOrEqual(4);
       expect(Math.abs(dFret)).toBeGreaterThan(0);
-      expect(text, `a slide should not claim the sequence: "${text}"`).not.toContain('One step along');
+      expect(text, `a slide should not claim the sequence: "${text}"`).not.toMatch(/steps? along/);
     } else {
-      // A crossing: exactly one string, exactly one step along the sequence,
-      // and level unless the G-B pair forced it across — which it must own.
-      expect(Math.abs(dString), `crossed ${Math.abs(dString)} strings at once: "${text}"`).toBe(1);
+      // A crossing, or a run of them in the same direction told as one leg: n
+      // strings is n places along the sequence, said as one number in both
+      // halves of the sentence. Level unless the G-B pair falls inside the
+      // span — which the step has to own.
+      //
+      // Because the sequence is a flat list cut at the 4|7 join, "n places
+      // along" can only hold if the run stayed inside it: a route that walked
+      // the join would have to leave the array to do it. So the tritone is
+      // checked by the same arithmetic rather than beside it.
+      const n = Math.abs(dString), dir = Math.sign(dString);
       const from = CYCLE.indexOf(a.degree), to = CYCLE.indexOf(b.degree);
       expect(from, `crossed off a ${a.degree}, which is not in the sequence`).toBeGreaterThanOrEqual(0);
-      expect(to - from, `${a.degree} to ${b.degree} is not one step along the sequence`)
-        .toBe(dString > 0 ? 1 : -1);
-      // The 4|7 join is a tritone, so it is the one crossing that never happens.
-      expect([a.degree, b.degree].join('')).not.toBe(dString > 0 ? '47' : '74');
-      const overGB = Math.min(a.string, b.string) === 3;
-      expect(dFret, 'a crossing is level unless the G-B pair shifts it')
-        .toBe(overGB ? dString : 0);
+      expect(to - from, `${a.degree} to ${b.degree} is not ${n} along the sequence`).toBe(dir * n);
+      // Runs are told whole, so two crossings the same way never draw as two
+      // legs — that is the thing the grouping exists to stop.
+      expect(prevCross, 'consecutive crossings the same way should be one leg').not.toBe(dir);
+      const overGB = Math.min(a.string, b.string) <= 3 && Math.max(a.string, b.string) >= 4;
+      expect(dFret, 'a crossing is level unless the G-B pair shifts it').toBe(overGB ? dir : 0);
       if (overGB) expect(text, `crossing G-B should name the quirk: "${text}"`).toContain('G–B');
       else expect(text).toContain('same fret');
-      expect(text).toContain('One step along');
+      expect(text, `${n} strings crossed: "${text}"`)
+        .toContain(`${COUNT[n]} step${n > 1 ? 's' : ''} along`);
+      prevCross = dir;
+      continue;
     }
+    prevCross = 0;
   }
+
   return { stops, said };
 }
 
@@ -214,25 +231,60 @@ test.describe('the "how do I find it" hint', () => {
     await expect(page.locator('#hintWarn')).toContainText('G→B');
   });
 
-  test('leaving a 7 towards a thicker string steps off the sequence first', async ({ page }) => {
-    // 7 to 4 is the tritone, so there is no crossing to make. The advice is to
-    // step onto the 1 or the 6 and cross from there — and both are offered,
-    // because next time round the other one will be the near one.
+  // The classes on one step's sequence strip, in the order the strip draws
+  // them — the picture's own account of which degrees it lit and how.
+  const stripOf = (page, step) => page.locator('#hintSteps li').nth(step)
+    .locator('.hint-cycle span').evaluateAll((els) =>
+      els.map((s) => `${s.textContent}${s.classList.contains('from') ? ':from'
+        : s.classList.contains('to') ? ':to' : s.classList.contains('via') ? ':via' : ''}`));
+
+  test('two crossings the same way are one step, counted once', async ({ page }) => {
+    // 4 on the D string, asked for a 2: step onto the 3, then 3 6 2 — two
+    // places along the sequence and two strings across, which is one jump for
+    // the hand and so one instruction. The 6 is counted through, not stopped
+    // on, which is why the strip lights it but the neck draws no marker there.
+    //
+    // The odd pair sits inside the reach, and only one of its two crossings is
+    // shifted, so the reach as a whole moves one fret — said once, the way the
+    // hand does it, rather than once per string. Every two-string reach the
+    // pricing ever actually picks has the G-B pair in it: a level one costs 22
+    // and loses to a slide long before it is worth describing.
+    await gotoRoute(page, { at: '2.3', find: '2' });
+    await openHint(page);
+    const { stops, said } = await expectSoundRoute(page);
+
+    expect(said).toHaveLength(2);
+    expect(said[0]).toMatch(/4 to 3 is a half step — go down 1 fret\./);
+    expect(said[1]).toMatch(/Two strings thinner, 1 fret up across the G–B pair, from 3 to 2\. Two steps along/);
+    expect(stops).toEqual([
+      { string: 2, fret: 3, degree: '4' },
+      { string: 2, fret: 2, degree: '3' },
+      { string: 4, fret: 3, degree: '2' },
+    ]);
+    expect(await stripOf(page, 1)).toEqual(['7', '3:from', '6:via', '2:to', '5', '1', '4']);
+    await expect(page.locator('#hintWarn')).toContainText('G→B');
+  });
+
+  // 7 to 4 is the tritone, so no crossing exists to make and the search puts a
+  // slide in front of it unprompted. The panel says nothing about why: the
+  // detour is described as the slide it is, in the same words as every other
+  // slide. Naming the broken join here would be teaching the exception before
+  // the rule.
+  test('leaving a 7 towards a thicker string slides off it without comment', async ({ page }) => {
     await gotoRoute(page, { at: '3.4', find: '5' });
     await openHint(page);
     const { stops, said } = await expectSoundRoute(page);
 
     expect(said).toHaveLength(2);
-    expect(said[0]).toMatch(/The 7–4 join is the one the sequence can't make/);
-    expect(said[0]).toMatch(/step off the 7 first: the 1 is 1 fret up \(the 6 would do too\)/);
+    expect(said[0]).toMatch(/7 to 1 is a half step — go up 1 fret\./);
     expect(said[1]).toMatch(/One string thicker, same fret, from 1 to 5\./);
     expect(stops).toEqual([
       { string: 3, fret: 4, degree: '7' },
       { string: 3, fret: 5, degree: '1' },
       { string: 2, fret: 5, degree: '5' },
     ]);
-    await expect(page.locator('.hint-branch')).toHaveCount(1);
-    await expect(page.locator('#hintWarn')).toContainText('tritone');
+    expect(said.join(' ')).not.toMatch(/join|tritone/i);
+    await expect(page.locator('#hintWarn')).toBeHidden();
   });
 
   test('leaving a 4 towards a thinner string does the same, mirrored', async ({ page }) => {
@@ -241,31 +293,14 @@ test.describe('the "how do I find it" hint', () => {
     const { stops, said } = await expectSoundRoute(page);
 
     expect(said).toHaveLength(2);
-    expect(said[0]).toMatch(/The 4–7 join is the one the sequence can't make/);
-    expect(said[0]).toMatch(/step off the 4 first: the 3 is 1 fret down \(the 5 would do too\)/);
+    expect(said[0]).toMatch(/4 to 3 is a half step — go down 1 fret\./);
     expect(said[1]).toMatch(/One string thinner, same fret, from 3 to 6\./);
     expect(stops).toEqual([
       { string: 2, fret: 3, degree: '4' },
       { string: 2, fret: 2, degree: '3' },
       { string: 3, fret: 2, degree: '6' },
     ]);
-    await expect(page.locator('.hint-branch')).toHaveCount(1);
-  });
-
-  // The fork is the only figure that has to agree with the neck's geometry:
-  // fret numbers grow downward, so its top branch must be the LOWER fret.
-  // Getting this backwards is invisible unless the two are compared.
-  test('the fork is stacked the same way up as the neck', async ({ page }) => {
-    await gotoRoute(page, { at: '3.4', find: '5' });
-    await openHint(page);
-
-    // Boxes are emitted solo, top, bottom.
-    const labels = await page.locator('.hint-branch text').allTextContents();
-    expect(labels[0], 'the solo box is the degree you are leaving').toBe('7');
-    const degAt = (fret) => page.evaluate((f) => document.querySelector(
-      `.fret-cell[data-string="3"][data-fret="${f}"]`)?.dataset.degree || null, fret);
-    expect(labels[1], 'top branch should be the lower fret').toBe(await degAt(2));
-    expect(labels[2], 'bottom branch should be the higher fret').toBe(await degAt(5));
+    expect(said.join(' ')).not.toMatch(/join|tritone/i);
   });
 
   // The handle every example above leans on, checked in its own right. Naming a
@@ -362,24 +397,21 @@ test.describe('the "how do I find it" hint', () => {
     await page.waitForFunction(() => document.querySelectorAll('.fret-cell').length > 0);
 
     // One picture per move, and the right one: the sequence for a crossing, the
-    // major scale for a slide, plus the fork on the slide that exists to walk
-    // round the sequence's broken join.
+    // major scale for a slide, and nothing else.
     let slides = 0, flatSlides = 0;
     for (let i = 0; i < 14; i++) {
       await openHint(page);
       const kinds = await page.locator('#hintSteps li').evaluateAll((els) => els.map((li) => ({
-        crosses: /One step along/.test(li.textContent),
+        crosses: /steps? along/.test(li.textContent),
         flat: /♭/.test(li.textContent),
         cycle: !!li.querySelector('.hint-cycle'),
         formula: !!li.querySelector('.hint-formula'),
-        fork: !!li.querySelector('.hint-branch'),
       })));
       for (const k of kinds) {
         expect(k.cycle, 'the sequence strip belongs to crossings and only crossings')
           .toBe(k.crosses);
         expect(k.formula, 'every slide shows the formula, and no crossing does')
           .toBe(!k.crosses);
-        expect(k.fork && k.crosses, 'a crossing never shows the fork').toBe(false);
         if (!k.crosses) { slides++; if (k.flat) flatSlides++; }
       }
       await page.locator('#hintCloseBtn').click();

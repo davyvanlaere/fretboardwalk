@@ -325,19 +325,11 @@
     font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:9.5px; font-weight:600;
     color:#2a1a00; background:var(--seek); border-radius:4px;
   }
-  /* One picture per step, sitting under the sentence it finishes — the same
-     place the cycle and formula strips sit, so a step reads the same way
-     whichever picture it carries. Capped rather than fluid: the rail is barely
-     wider than the fork, and stretched to fill it the two branches drift apart
-     far enough to stop reading as one choice. */
-  .hint-branch{
-    display:block; width:100%; max-width:172px; height:50px; margin:7px 0 0;
-  }
   .hint-steps b{ color:var(--text); font-weight:600; }
   .hint-steps em{ font-style:normal; color:var(--text); }
 
-  /* The two exceptions. Called out in the miss colour because they are exactly
-     where a confident guess goes wrong. */
+  /* The tuning's one exception. Called out in the miss colour because it is
+     exactly where a confident guess goes wrong. */
   .hint-warn{
     margin:10px 0 0; padding-top:8px; border-top:1px solid var(--line);
     font-size:11.5px; line-height:1.45; color:var(--miss);

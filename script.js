@@ -1028,13 +1028,15 @@
   //   cross  — to the neighbouring string, one place along 7 3 6 2 5 1 4.
   //
   // Everything that used to need a special case falls out of those two instead
-  // of being written down beside them. The sequence is cut at the 4|7 join
-  // because that one is a tritone: no crossing move exists across it, so the
-  // search puts a slide in front of it unprompted and the advice becomes "step
-  // off the 7 first". A lowered degree isn't in the sequence either and gets
-  // the same treatment for the same reason. G to B is tuned a third rather than
-  // a fourth, so its crossing move lands a fret across — still one move, still
-  // one place along the sequence, with the quirk named where it bites.
+  // of being written down beside them, and that goes for the wording as much as
+  // the routing. The sequence is cut at the 4|7 join because that one is a
+  // tritone: no crossing move exists across it, so the search puts a slide in
+  // front of it unprompted and that slide is then described like any other —
+  // a distance along the string, with no note taken of why it is there. A
+  // lowered degree isn't in the sequence either and gets the same treatment for
+  // the same reason. G to B is tuned a third rather than a fourth, so its
+  // crossing move lands a fret across — still one move, still one place along
+  // the sequence, with the quirk named where it bites.
   const CYCLE = ['7','3','6','2','5','1','4'];
 
   // Hand prices in tenths, so the arithmetic stays whole numbers and two routes
@@ -1179,14 +1181,19 @@
   }
 
   // The sequence with this one crossing lit on it: the string of digits from
-  // the guide, made concrete for the move in front of you. Both ends stay
-  // marked as the seam, because the join between them is the reason a route
-  // ever has to step off a 4 or a 7 first.
-  function cycleStripHtml(m){
+  // the guide, made concrete for the move in front of you. A reach of more
+  // than one string lights what it passes over too, dimmer than either end —
+  // the places the sequence is counted through but the hand never stops. Both
+  // ends of the row stay marked as the seam, because the join between them is
+  // the reason a route ever has to step off a 4 or a 7 first.
+  function cycleStripHtml(g){
+    const from = g[0].from, to = g[g.length - 1].to;
+    const via = g.slice(0, -1).map(m => m.to);
     const cells = CYCLE.map((d, i)=>{
       const cls = [];
-      if(d === m.from) cls.push('from');
-      else if(d === m.to) cls.push('to');
+      if(d === from) cls.push('from');
+      else if(d === to) cls.push('to');
+      else if(via.indexOf(d) >= 0) cls.push('via');
       if(i === 0 || i === CYCLE.length - 1) cls.push('seam');
       return `<span class="${cls.join(' ')}">${d}</span>`;
     }).join('');
@@ -1242,50 +1249,6 @@
     return `<div class="hint-formula">${cells}</div>`;
   }
 
-  // The two degrees the sequence cannot cross away from, and the two nearest
-  // places to step onto instead. Lower fret first, matching the neck.
-  const BREAK_EXITS = {'7':['6','1'], '4':['3','5']};
-
-  // The broken join drawn rather than described: you are on the 4 or the 7, the
-  // crossing you want is the tritone, so the move is to step onto a neighbour
-  // first. Both neighbours are shown — the one this route takes lit, the other
-  // dim — because next time round the other one will be the near one.
-  //
-  // Mirrored on direction, since that is half the fact: from a 4 you are
-  // heading to a thinner string (fork opens right), from a 7 to a thicker one
-  // (fork opens left).
-  function breakFigureHtml(deg, chosen){
-    const exits = BREAK_EXITS[deg];
-    const W = 150, flip = deg === '7';
-    const X  = (x) => flip ? W - x : x;
-    const RX = (x, w) => flip ? W - x - w : x;
-    const ink = (on) => on ? 'var(--seek)' : 'var(--dim)';
-
-    const box = (x, y, d, on)=>{
-      const fill = d === deg ? 'var(--live)' : on ? 'var(--seek)' : 'var(--bg)';
-      const edge = (d === deg || on) ? 'none' : 'var(--line-strong)';
-      const text = d === deg ? '#04212a' : on ? '#2a1a00' : 'var(--muted)';
-      return `<rect x="${RX(x,30)}" y="${y}" width="30" height="20" rx="6" fill="${fill}" stroke="${edge}"/>`
-           + `<text x="${RX(x,30)+15}" y="${y+14}" text-anchor="middle" font-size="12.5"`
-           + ` font-weight="600" fill="${text}">${d}</text>`;
-    };
-    const limb = (y, on)=> `<path d="M${X(34)},22 C${X(60)},22 ${X(60)},${y} ${X(84)},${y}"`
-                         + ` fill="none" stroke="${ink(on)}" stroke-width="1.6"/>`;
-    const arrow = (y, on)=> `<polygon points="${X(84)},${y-3.5} ${X(91)},${y} ${X(84)},${y+3.5}"`
-                          + ` fill="${ink(on)}"/>`;
-
-    // Lower fret on top, higher fret below — matching the neck, where fret
-    // numbers grow downward away from the nut.
-    return `<svg class="hint-branch" viewBox="0 0 ${W} 44" preserveAspectRatio="xMidYMid meet"`
-      + ` role="img" aria-label="From the ${deg}, step onto the ${exits[0]} or the ${exits[1]} first">`
-      + box(2, 12, deg, false)
-      + limb(10, chosen === exits[0]) + limb(34, chosen === exits[1])
-      + arrow(10, chosen === exits[0]) + arrow(34, chosen === exits[1])
-      + box(94, 0, exits[0], chosen === exits[0])
-      + box(94, 24, exits[1], chosen === exits[1])
-      + `</svg>`;
-  }
-
   const L = (d) => DEGREE_LABEL[d] || '';
   const wayWord = (n) => n > 0 ? 'up' : 'down';
 
@@ -1308,64 +1271,72 @@
     return words + formulaRowHtml(m.from, m.to, m.frets > 0);
   }
 
-  // One crossing. "Same fret" is the rule, so it is claimed only where it holds
-  // — and where it doesn't, the tuning is named on the spot rather than left to
-  // the footnote.
-  function crossHtml(m){
-    const where = m.quirk
-      ? `, ${fretWord(m.frets)} ${wayWord(m.frets)} across the <b>G–B</b> pair`
+  const COUNT_WORD = ['', 'One', 'Two', 'Three', 'Four', 'Five'];
+
+  // A crossing, or a run of them in the same direction, which is one thing to
+  // do and so one thing to say. "Two strings thicker" is the instruction the
+  // hand actually carries out; saying "one string thicker" twice asks it to
+  // stop somewhere it never stops. The sequence is still counted a place per
+  // string, so the count of strings and the count of steps are the same number
+  // said twice — that being the whole point of the sequence.
+  //
+  // "Same fret" is the rule, so it is claimed only where it holds — and where
+  // it doesn't, the tuning is named on the spot rather than left to the
+  // footnote. At most one crossing in a run can be the G–B pair, so the run's
+  // own displacement names it as plainly as a single crossing would.
+  function crossHtml(g){
+    const first = g[0], last = g[g.length - 1];
+    const frets = g.reduce((n, m) => n + m.frets, 0);
+    const n = COUNT_WORD[g.length], s = g.length > 1 ? 's' : '';
+    const where = g.some(m => m.quirk) && frets !== 0
+      ? `, ${fretWord(frets)} ${wayWord(frets)} across the <b>G–B</b> pair`
       : ', same fret';
-    return `<b>One string ${m.dir === 1 ? 'thinner' : 'thicker'}</b>${where}, `
-         + `from <b>${m.from}</b> to <b>${m.to}</b>. One step along the memorised `
-         + `circle of fourths sequence (<b>7 3 6 2 5 1 4</b>).`
-         + cycleStripHtml(m);
+    return `<b>${n} string${s} ${first.dir === 1 ? 'thinner' : 'thicker'}</b>${where}, `
+         + `from <b>${first.from}</b> to <b>${last.to}</b>. ${n} step${s} along the `
+         + `memorised circle of fourths sequence (<b>7 3 6 2 5 1 4</b>).`
+         + cycleStripHtml(g);
   }
 
-  // The slide that exists only to get off the tritone, worded as the exception
-  // it is rather than as an unexplained detour.
-  function breakHtml(m, exits){
-    const other = exits[0] === m.to ? exits[1] : exits[0];
-    return `The <b>${m.from}</b>–<b>${m.from === '4' ? '7' : '4'}</b> join is the one the `
-         + `sequence can't make, so step off the <b>${m.from}</b> first: the <b>${m.to}</b> `
-         + `is ${fretWord(m.frets)} ${wayWord(m.frets)} (the <b>${other}</b> would do too).`;
+  // The moves the router found, gathered into the instructions a player is
+  // given. Crossings that keep going the same way are one instruction; a slide
+  // is always its own, because two slides in a row would each be a distance to
+  // measure. Both the panel and the board walk this, so a step in the text and
+  // a leg on the neck stay the same thing however the moves underneath group.
+  function groupMoves(moves){
+    const groups = [];
+    for(const m of moves){
+      const last = groups[groups.length - 1];
+      if(last && m.kind === 'cross' && last[0].kind === 'cross' && last[0].dir === m.dir)
+        last.push(m);
+      else groups.push([m]);
+    }
+    return groups;
   }
 
   function renderHintText(r){
-    let quirk = false, broke = false;
+    let quirk = false;
 
-    // One list item per move, in the same order the board draws them, so "step
-    // 2" in the panel and the "2" on the neck are always the same instruction.
-    const steps = r.moves.map((m, i)=>{
-      if(m.kind === 'cross'){
-        quirk = quirk || m.quirk;
-        return crossHtml(m);
+    // One list item per instruction, in the same order the board draws them, so
+    // "step 2" in the panel and the "2" on the neck are always the same thing.
+    const steps = groupMoves(r.moves).map((g)=>{
+      if(g[0].kind === 'cross'){
+        quirk = quirk || g.some(m => m.quirk);
+        return crossHtml(g);
       }
-      const next = r.moves[i + 1];
-      const exits = next && next.kind === 'cross' &&
-                    next.dir === (m.from === '4' ? 1 : -1) ? BREAK_EXITS[m.from] : null;
-      if(exits && exits.indexOf(m.to) >= 0){
-        broke = true;
-        // The fork says which way out; the row still says how far, because this
-        // leg is a slide like any other.
-        return breakHtml(m, exits) + breakFigureHtml(m.from, m.to)
-             + formulaRowHtml(m.from, m.to, m.frets > 0);
-      }
-      return slideHtml(m);
+      return slideHtml(g[0]);
     });
     hintStepsEl.innerHTML = steps.map(s => `<li>${s}</li>`).join('');
 
-    // The two joins in the whole system that are not perfect fourths — one in
-    // the tuning, one in the sequence. Named only on the routes that actually
-    // walk into them, which is the only moment either means anything.
-    const warn = [];
-    if(quirk) warn.push('Mind the gap: <b>G→B</b> is the one string pair tuned a third '
-      + 'rather than a fourth, so the sequence sits a fret across it — and stays shifted '
-      + 'for every string above.');
-    if(broke) warn.push('<b>4</b> and <b>7</b> are a tritone apart, which is why the '
-      + 'sequence is written cut between them: it is the one crossing that has to be '
-      + 'walked around rather than made.');
-    hintWarnEl.innerHTML = warn.join(' ');
-    hintWarnEl.hidden = !warn.length;
+    // The one join in the tuning that is not a perfect fourth. Named only on
+    // the routes that actually cross it, which is the only moment it means
+    // anything.
+    const warn = quirk
+      ? 'Mind the gap: <b>G→B</b> is the one string pair tuned a third '
+        + 'rather than a fourth, so the sequence sits a fret across it — and stays shifted '
+        + 'for every string above.'
+      : '';
+    hintWarnEl.innerHTML = warn;
+    hintWarnEl.hidden = !warn;
 
     // Every degree repeats all over the neck, and the router picked whichever
     // was cheapest to reach. Saying so keeps the hint honest and quietly makes
@@ -1443,12 +1414,17 @@
       stops.appendChild(t);
     };
 
-    // The route is a list of moves, so it draws as a list of stops: one leg per
-    // move, in the same order the panel numbers them, however many there are.
-    // The last stop is the destination and gets its own heavier ring below.
+    // The route draws as the instructions read: one leg per grouped step, in
+    // the same order the panel numbers them. A reach of two strings is one arc,
+    // not two — the string it passes over is counted in the sequence, not
+    // stopped on, so drawing a pause there would contradict the sentence above
+    // it. The last stop is the destination and gets its own heavier ring below.
+    const groups = groupMoves(r.moves);
     const stopsOnRoute = [{p:at(r.from.string, r.from.fret), deg:r.curDeg, mark:false}];
-    r.moves.forEach((m, i) => stopsOnRoute.push({p:at(m.string, m.fret), deg:m.to,
-      mark:i < r.moves.length - 1}));
+    groups.forEach((g, i) => {
+      const m = g[g.length - 1];
+      stopsOnRoute.push({p:at(m.string, m.fret), deg:m.to, mark:i < groups.length - 1});
+    });
 
     for(let i = 1; i < stopsOnRoute.length; i++){
       addLeg(stopsOnRoute[i - 1].p, stopsOnRoute[i].p);
@@ -1765,8 +1741,8 @@
       // sequence's broken join. That join is real, but it is an exception, and
       // drilling an exception before the rule is in place teaches the
       // exception. The rule is: how far apart are the two numbers. The join is
-      // still there in the hint panel and on the degree map for whoever walks
-      // into it, which is the moment it means anything.
+      // still there on the degree map for whoever goes looking, which is the
+      // moment it means anything.
       title:'Which move, and when',
       body(){
         const r = tour.run ? tour.run.degrees : SCALE_RUNS[0];
