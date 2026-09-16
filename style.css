@@ -552,6 +552,12 @@
     flex:1 1 auto; min-height:0; min-width:0;
     overflow-x:auto; overflow-y:hidden;
     -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    /* The neck stops where the neck stops. body already refuses to chain, but
+       overscroll-behavior is per scroll container, so without this the board
+       still rubber-bands on a touchscreen or a precision trackpad and drags
+       the page background into view under the last fret — the one place the
+       app looks broken while behaving exactly as asked. */
+    overscroll-behavior:none;
   }
   /* Horizontal neck centres inside a full-height scroller. The scroller keeps a
      definite height so crossSize can be measured from it; centring the wrap

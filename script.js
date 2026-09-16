@@ -1060,14 +1060,12 @@
 
   // Every move a player can be told to make from one square, and nothing else.
   //
-  // A slide is one move however far it goes, and deliberately uncapped. A cap
-  // reads like prudence but only ever splits one slide into two — "go down two
-  // frets, then two more" — because which note you are sent to is settled on
-  // hand price before any of this runs, and by then a note more than a few
-  // frets along your own string has already lost to a nearer one across it.
-  // Measured over every key, position and target: the longest slide a winning
-  // route uses is four frets, with a cap or without one. The limit is a fact
-  // about the prices, not a rule that needs writing down.
+  // A slide is one move however far it goes, and uncapped here on purpose. A cap
+  // in this function reads like prudence but only ever splits one slide into two
+  // — "go down two frets, then two more" — which is a worse sentence about the
+  // same journey. The hand's real limit belongs where the destination is chosen,
+  // and REACH there enforces it on the one candidate that could break it; a
+  // route picked on price alone stays inside four frets without being told to.
   function movesFrom(s, f){
     const deg = degreeAt(s, f);
     const out = [];
@@ -1130,21 +1128,53 @@
     const target = state.targetDegree;
     const reach = reachAll(s, f);
 
-    // Price decides the destination, as promised; the explanation only breaks
-    // ties between notes that cost the hand exactly the same. Comparing both in
-    // one lexicographic key keeps that order honest, and skipping squares the
-    // two moves can't reach means an unreachable corner costs a slightly dearer
-    // note rather than costing the whole hint.
-    let best = null;
+    // Price decides the destination — but only to within a string of it.
+    //
+    // A crossing costs the hand 1.1 frets and the head a whole sentence, and
+    // pricing that knows only the first number will buy two crossings to save
+    // three frets, then need three steps to explain the purchase. Ranking price
+    // first and the explanation second doesn't temper that, because it leaves
+    // the explanation voting only on exact ties — and exact ties essentially
+    // never happen, so over every key, position and target the second half of
+    // that key never once changed an answer.
+    //
+    // So the hand names a budget rather than a number. A note within one more
+    // crossing's worth of travel of the cheapest is near enough that the head
+    // may choose between them, and the head counts moves. Outside the budget
+    // price still rules absolutely, which is what keeps the hint pointing at
+    // the note under your fingers instead of the tidiest one on the neck.
+    //
+    // Squares the two moves can't reach are skipped, so an unreachable corner
+    // costs a slightly dearer note rather than the whole hint. So is any route
+    // wanting a slide beyond a hand's span: the budget is the hand's money, and
+    // a sixth fret away is not the hand's to spend. Without that guard the
+    // budget buys exactly one bad trade, high on the low E where there is
+    // nothing near enough to cross to.
+    const REACH = 4;
+    const slideSpan = (node) => node.moves.reduce(
+      (n, m) => m.kind === 'slide' ? Math.max(n, Math.abs(m.frets)) : n, 0);
+
+    const cands = [];
     for(let ns = 0; ns <= 5; ns++) for(let nf = 0; nf <= FRET_COUNT; nf++){
       if(degreeAt(ns, nf) !== target) continue;
       const node = reach.get(nodeId(ns, nf));
       if(!node || !node.moves.length) continue;
-      const key = [PRICE_FRET * Math.abs(nf - f) + PRICE_STRING * Math.abs(ns - s)]
-        .concat(node.key);
-      if(!best || lessKey(key, best.key)) best = {key, node};
+      cands.push({price:PRICE_FRET * Math.abs(nf - f) + PRICE_STRING * Math.abs(ns - s),
+                  node});
     }
-    if(!best) return null;
+    if(!cands.length) return null;
+
+    // Inside the budget the head ranks and price settles its ties. If nothing
+    // qualifies — a corner where every near note needs a long slide — the old
+    // price-first order stands, so there is always an answer.
+    const floor = Math.min.apply(null, cands.map(c => c.price));
+    const band = cands.filter(c => c.price <= floor + PRICE_STRING
+                                && slideSpan(c.node) <= REACH);
+    const pool = band.length ? band : cands;
+    const rankOf = band.length ? (c) => c.node.key.concat(c.price)
+                               : (c) => [c.price].concat(c.node.key);
+    let best = pool[0];
+    for(const c of pool) if(lessKey(rankOf(c), rankOf(best))) best = c;
 
     return {
       from:{string:s, fret:f}, dest:{string:best.node.s, fret:best.node.f},

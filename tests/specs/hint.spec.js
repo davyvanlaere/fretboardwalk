@@ -23,11 +23,12 @@ const COUNT = ['', 'One', 'Two', 'Three', 'Four', 'Five'];
 // particular route can be looked at rather than played for. Twenty-odd turns of
 // waiting for the game to offer a ♭7 is how the old specs became slow and
 // still missed the cases that mattered.
-async function gotoRoute(page, { at, find, flats = false }) {
+async function gotoRoute(page, { at, find, flats = false, key = 0 }) {
   await H.seedStorage(page, {
     [H.STORAGE.onboarded]: '1',
     [H.STORAGE.nudge]: '1',
-    [H.STORAGE.settings]: JSON.stringify({ includeFlats: flats, noteDisplay: 'numerals' }),
+    [H.STORAGE.settings]: JSON.stringify({ includeFlats: flats, noteDisplay: 'numerals',
+      keyIndex: key }),
   });
   await page.goto(`/?at=${at}&find=${find}`);
   await page.waitForFunction(() => document.querySelectorAll('.fret-cell').length > 0);
@@ -75,8 +76,11 @@ const stepTexts = (page) => page.locator('#hintSteps li').evaluateAll((els) =>
     return clone.textContent.replace(/\s+/g, ' ').trim();
   }));
 
-// What the cheapest note of this degree costs the hand from where you stand,
-// in the app's own tenths — a fret 10, a string 11.
+// The app's own tenths: a fret 10, a string 11, and the budget the hint is
+// allowed to spend over the cheapest note to buy a shorter explanation.
+const PRICE_STRING = 11;
+
+// What the cheapest note of this degree costs the hand from where you stand.
 const cheapestPrice = (page, degree, from) => page.evaluate(({ d, s, f }) => {
   let min = Infinity;
   for (const c of document.querySelectorAll('.fret-cell')) {
@@ -104,9 +108,14 @@ async function expectSoundRoute(page) {
   const dest = stops[stops.length - 1];
   expect(dest.degree, `hint pointed at ${dest.degree}, asked for ${target}`).toBe(target);
 
+  // Not the cheapest note outright: a crossing costs the hand 1.1 frets and the
+  // head a whole sentence, so the hint may walk one crossing's worth further to
+  // be told in fewer steps. What it may never do is wander — anything past the
+  // budget means pricing stopped deciding the destination at all.
   const price = 10 * Math.abs(dest.fret - stops[0].fret) + 11 * Math.abs(dest.string - stops[0].string);
-  expect(price, 'the destination should be a cheapest one for the hand')
-    .toBe(await cheapestPrice(page, target, stops[0]));
+  const cheapest = await cheapestPrice(page, target, stops[0]);
+  expect(price, `destination cost ${price}, cheapest is ${cheapest}`)
+    .toBeLessThanOrEqual(cheapest + PRICE_STRING);
 
   // The direction of the crossing the previous leg made, 0 if it was a
   // slide — so a run told as two legs instead of one is caught.
@@ -239,29 +248,33 @@ test.describe('the "how do I find it" hint', () => {
         : s.classList.contains('to') ? ':to' : s.classList.contains('via') ? ':via' : ''}`));
 
   test('two crossings the same way are one step, counted once', async ({ page }) => {
-    // 4 on the D string, asked for a 2: step onto the 3, then 3 6 2 — two
-    // places along the sequence and two strings across, which is one jump for
-    // the hand and so one instruction. The 6 is counted through, not stopped
-    // on, which is why the strip lights it but the neck draws no marker there.
+    // 2 high up the top E, asked for a 4: 2 6 3 — two places along the sequence
+    // and two strings across, which is one jump for the hand and so one
+    // instruction. The 6 is counted through, not stopped on, which is why the
+    // strip lights it but the neck draws no marker there.
     //
     // The odd pair sits inside the reach, and only one of its two crossings is
     // shifted, so the reach as a whole moves one fret — said once, the way the
-    // hand does it, rather than once per string. Every two-string reach the
-    // pricing ever actually picks has the G-B pair in it: a level one costs 22
-    // and loses to a slide long before it is worth describing.
-    await gotoRoute(page, { at: '2.3', find: '2' });
+    // hand does it, rather than once per string.
+    //
+    // It takes a key to reach this, because a two-string reach is a dear way to
+    // be told something: it costs the hand 22 where a slide to the same degree
+    // often costs 30, and the hint will pay that extra to lose a whole step.
+    // Level reaches lose outright, so the ones left are the G-B ones, which is
+    // why the pair is in every fixture here rather than by choice.
+    await gotoRoute(page, { at: '5.13', find: '4', key: 9 });  // E♭ major
     await openHint(page);
     const { stops, said } = await expectSoundRoute(page);
 
     expect(said).toHaveLength(2);
-    expect(said[0]).toMatch(/4 to 3 is a half step — go down 1 fret\./);
-    expect(said[1]).toMatch(/Two strings thinner, 1 fret up across the G–B pair, from 3 to 2\. Two steps along/);
+    expect(said[0]).toMatch(/Two strings thicker, 1 fret down across the G–B pair, from 2 to 3\. Two steps along/);
+    expect(said[1]).toMatch(/3 to 4 is a half step — go up 1 fret\./);
     expect(stops).toEqual([
-      { string: 2, fret: 3, degree: '4' },
-      { string: 2, fret: 2, degree: '3' },
-      { string: 4, fret: 3, degree: '2' },
+      { string: 5, fret: 13, degree: '2' },
+      { string: 3, fret: 12, degree: '3' },
+      { string: 3, fret: 13, degree: '4' },
     ]);
-    expect(await stripOf(page, 1)).toEqual(['7', '3:from', '6:via', '2:to', '5', '1', '4']);
+    expect(await stripOf(page, 0)).toEqual(['7', '3:to', '6:via', '2:from', '5', '1', '4']);
     await expect(page.locator('#hintWarn')).toContainText('G→B');
   });
 
@@ -424,10 +437,15 @@ test.describe('the "how do I find it" hint', () => {
   // ---- the panel as a thing on screen ----
 
   // The longest route the app can produce, which is what the panel has to be
-  // sized against: four steps and the G-B footnote, 443px of panel. It used to
-  // take that out of the neck — 58px of board on a 664px phone, 10px on a
-  // 568px one — so the arrows were drawn across a neck that wasn't there.
-  const WORST = { at: '5.4', find: '1', flats: true };
+  // sized against: four steps and the G-B footnote. It used to take that out of
+  // the neck — 58px of board on a 664px phone, 10px on a 568px one — so the
+  // arrows were drawn across a neck that wasn't there.
+  //
+  // Four steps is the ceiling, and a rare one: swept over every key, position
+  // and target, seventeen turns out of eight thousand reach it. Which turn is
+  // worst moves whenever the routing changes, so it is found by sweep rather
+  // than remembered — the old one, a 1 from the top E, is a single slide now.
+  const WORST = { at: '5.0', find: 'b7', flats: true };
 
   for (const height of [568, 664, 880]) {
     test(`the neck keeps its share of a ${height}px phone`, async ({ page }) => {
