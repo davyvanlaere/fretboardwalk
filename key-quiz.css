@@ -1,0 +1,131 @@
+/* The quiz itself. The page shell — tokens, top bar, type, the .deg note
+   tokens — is help.css; this only adds what the guide pages don't have.
+
+   Colours keep the trainer's meanings: cyan is the key and a right answer,
+   amber is what you were meant to find, red is a miss. */
+
+:root{ --miss:#fb7185; }   /* the trainer's miss red (style.css) */
+
+.kq-card, .kq-why{
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:16px; padding:18px; margin:18px 0 0;
+}
+
+.kq-top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 16px; }
+.kq-ask{ font-size:20px; line-height:1.3; margin:0; }
+.kq-ask strong{ color:var(--live); white-space:nowrap; }
+.kq-streak{
+  flex:0 0 auto; font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim);
+}
+.kq-streak b{ font-size:15px; letter-spacing:0; color:var(--text); margin-left:4px; }
+
+/* One column per letter: the note as spelled so far, then sharp / natural /
+   flat stacked in pitch order, then its degree. */
+.kq-slots{ display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:6px; max-width:520px; }
+.kq-slot{ display:flex; flex-direction:column; gap:5px; min-width:0; }
+.kq-note{
+  font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-weight:600;
+  font-size:18px; line-height:32px; text-align:center; color:var(--text);
+}
+.kq-deg{
+  font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  font-size:11px; line-height:1.4; text-align:center; color:var(--dim);
+}
+.kq-slot.root .kq-note{ color:var(--live); }
+.kq-root{
+  flex:1 1 auto; display:flex; align-items:center; justify-content:center;
+  border:1px dashed var(--line-strong); border-radius:9px;
+  font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim);
+}
+
+/* The real radio lies invisibly over its face, so a tap anywhere on the
+   button lands on the input itself. */
+.kq-acc{ position:relative; display:block; }
+.kq-acc input{ position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+.kq-acc input:disabled{ cursor:default; }
+.kq-acc span{
+  display:flex; align-items:center; justify-content:center; height:38px;
+  background:var(--panel-3); border:1px solid var(--line-strong); border-radius:9px;
+  color:var(--muted); font-size:17px;
+  transition:background .12s, border-color .12s, color .12s;
+}
+.kq-acc input:enabled:hover + span{ color:var(--text); border-color:var(--muted); }
+.kq-acc input:checked + span{ color:var(--live); border-color:var(--live); background:rgba(34,211,238,.1); }
+.kq-acc input:focus-visible + span{ outline:2px solid var(--live); outline-offset:2px; }
+
+/* After checking: a miss strikes out what you spelled, marks your choice red
+   and rings the one it needed. */
+.kq-slot.ok .kq-note{ color:var(--live); }
+.kq-slot.bad .kq-note{ color:var(--miss); text-decoration:line-through; text-decoration-thickness:2px; }
+.kq-slot.bad input:checked + span{ color:var(--miss); border-color:var(--miss); background:rgba(251,113,133,.12); }
+.kq-acc.want span{ color:var(--seek); border-color:var(--seek); box-shadow:0 0 0 1px var(--seek); }
+
+.kq-btn{
+  display:block; width:100%; max-width:520px; margin:16px 0 0;
+  background:var(--live); border:1px solid var(--live); color:#04212a;
+  font-family:inherit; font-size:15px; font-weight:600;
+  padding:12px 16px; border-radius:10px; cursor:pointer;
+}
+.kq-btn:hover{ background:#4fe0f4; }
+.kq-btn:disabled{ opacity:.4; cursor:default; background:var(--live); }
+
+.kq-verdict{ margin:12px 0 0; min-height:1.7em; font-size:15px; font-weight:600; line-height:1.5; }
+.kq-verdict.ok{ color:var(--live); }
+.kq-verdict.miss{ color:var(--miss); }
+
+/* ---------- why: the circle and its explanation ---------- */
+.kq-why{ display:grid; gap:18px; align-items:start; border-color:rgba(251,113,133,.25); }
+.kq-why[hidden]{ display:none; }
+@media (min-width:720px){
+  .kq-why{ grid-template-columns:minmax(0, 330px) minmax(0, 1fr); }
+}
+
+.kq-fig{ margin:0; }
+.kq-fig svg{ display:block; width:100%; max-width:360px; height:auto; margin:0 auto; }
+.kq-legend{
+  display:flex; flex-wrap:wrap; justify-content:center; gap:4px 14px; margin-top:8px;
+  font-size:12px; line-height:1.5; color:var(--muted);
+}
+.kq-legend span{ display:inline-flex; align-items:center; gap:6px; }
+.kq-sw{ width:12px; height:12px; border-radius:50%; display:inline-block; }
+.kq-sw.arc{ border-radius:3px; background:rgba(34,211,238,.18); border:1px solid rgba(34,211,238,.55); }
+.kq-sw.miss{ background:rgba(251,113,133,.18); border:2px solid var(--miss); }
+.kq-sw.seek{ border:2px solid var(--seek); }
+
+.kq-explain p{ font-size:15.5px; line-height:1.65; margin:0 0 12px; }
+.kq-explain strong{ font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:.95em; white-space:nowrap; }
+.kq-why .kq-btn{ margin-top:6px; }
+.deg.miss{ color:var(--miss); border-color:rgba(251,113,133,.45); }
+
+#kqCircle text{ font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; text-anchor:middle; }
+.kq-ring{ fill:none; stroke:var(--line-strong); stroke-width:1; }
+.kq-arc{ fill:rgba(34,211,238,.08); stroke:rgba(34,211,238,.4); stroke-width:1.2; }
+
+.kq-node circle{ fill:var(--panel-2); stroke:var(--line-strong); stroke-width:1.2; }
+.kq-node .kq-name{ fill:var(--dim); font-size:13px; font-weight:500; }
+.kq-node .kq-name.long{ font-size:10px; }
+.kq-node .kq-num{ fill:var(--dim); font-size:11px; }
+.kq-node.in circle{ fill:var(--panel-3); stroke:#4a5568; }
+.kq-node.in .kq-name{ fill:var(--text); font-weight:600; }
+.kq-node.root circle{ fill:var(--live); stroke:#8af0ff; }
+.kq-node.root .kq-name{ fill:#04212a; }
+.kq-node.root .kq-num{ fill:var(--live); }
+.kq-node.needed circle{ stroke:var(--seek); stroke-width:2.5; }
+.kq-node.wrong circle{ fill:rgba(251,113,133,.16); stroke:var(--miss); stroke-width:2; }
+.kq-node.wrong .kq-name{ fill:var(--miss); font-weight:600; }
+.kq-clash rect{ fill:#2a1519; stroke:var(--miss); stroke-width:1.2; }
+.kq-clash text{ fill:var(--miss); font-size:11.5px; font-weight:600; }
+
+#kqCircle .kq-centre-key{
+  font-family:'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
+  fill:var(--text); font-size:18px; font-weight:600;
+}
+.kq-centre-sig{ fill:var(--muted); font-size:11.5px; }
+
+@media (max-width:560px){
+  .kq-card, .kq-why{ padding:14px 12px; }
+  .kq-ask{ font-size:18px; }
+  .kq-slots{ gap:5px; }
+  .kq-note{ font-size:16px; }
+}

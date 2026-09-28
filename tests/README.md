@@ -74,6 +74,7 @@ these specs are about.
 | `settings.spec.js` | Persistence round-trips, and that hand-edited or corrupt storage can't break startup |
 | `timeattack.spec.js` | Run chrome, the per-display-mode score buckets, leaderboard cleanup, and restoring the practice run underneath |
 | `hint.spec.js` | "How do I find it": which note it sends you to, and whether the route it describes is one the two moves can actually make |
+| `keyquiz.spec.js` | The key quiz at `/key-quiz` (a prototype, not linked from anywhere yet): every key's spelling checked against hand-written key signatures, scoring, and the circle-of-fifths explanation of a miss |
 
 ### Looking at one particular route
 
@@ -94,6 +95,11 @@ direction. Both parameters are ignored unless they name a real square or an
 enabled degree, so a lowered degree also needs `includeFlats` seeded into
 settings. The worked examples in `hint.spec.js` all start this way, and the
 same URLs are the quickest way to look at a route by hand.
+
+`/key-quiz` picks its keys at random too, and `?key=` pins the first one,
+spelled in ASCII — `/key-quiz?key=Eb`, `/key-quiz?key=F%23` (a bare `#` would
+start the URL fragment). Questions after the first are random again, so a spec
+that goes further reads the key off the page.
 
 ## `genchords.js`
 
