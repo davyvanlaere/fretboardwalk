@@ -5,10 +5,9 @@
   // One number does all the work: a note's place on the line of fifths. C is
   // 0; each fifth up is +1 (G 1, D 2 … F♯ 6, C♯ 7) and each fifth down −1
   // (F −1, B♭ −2 … G♭ −6). For a key's root that number IS its key signature
-  // — +2 is two sharps, −3 three flats. The circle of fifths is the same line
-  // wrapped round at 12, and a major key is the seven neighbours running from
-  // one step below its root to five above. Spelling, key signature and the
-  // diagram all fall out of that, so there is no per-key table to get wrong.
+  // — +2 is two sharps, −3 three flats — and the circle of fifths is the same
+  // line wrapped round at 12. Spelling, key signature and the diagram all fall
+  // out of that, so there is no per-key table to get wrong.
   const LETTERS = 'FCGDAEB';                 // the naturals, at −1 … 5
   const SIGN = {'-1':'♭', '0':'', '1':'♯'};
   const mod = (n, m) => ((n % m) + m) % m;
@@ -17,35 +16,47 @@
   const spell    = p => letterOf(p) + SIGN[Math.floor((p + 1) / 7)];
   const posOf    = (letter, acc) => LETTERS.indexOf(letter) - 1 + 7 * acc;
 
-  // Degrees 1–7 as steps from the root along that line. In step order they
-  // read 4 1 5 2 6 3 7 — the trainer's across-the-strings sequence, backwards.
+  // Degrees 1–7 as steps from the root along that line, in scale order.
   const DEGREE_STEPS = [0, 2, 4, -1, 1, 3, 5];
 
+  // Walking round the circle from C, each step clockwise adds one sharp (the
+  // new key's 7th) and each step counter-clockwise one flat (the new key's
+  // 4th): F♯ C♯ G♯ D♯ A♯ E♯ B♯ one way, B♭ E♭ A♭ D♭ G♭ C♭ F♭ the other.
+  const addedAt = (dir, step) => dir > 0 ? 5 + step : -1 - step;
+  // Both orders are usually remembered as one sentence, read both ways.
+  const MNEMONICS = {'1': 'Father Charles Goes Down And Ends Battle', '-1': "Battle Ends And Down Goes Charles's Father"};
+  // The reverse: the step that brings an accidental in, or null for a natural.
+  function stepOf(p){
+    if(p >= 6) return {dir: 1, step: p - 5};
+    if(p <= -2) return {dir: -1, step: -1 - p};
+    return null;
+  }
+
   // The trainer's twelve keys (script.js), in circle order from C: sharps up
-  // to F♯, flats from D♭. They double as the circle's labels outside the key.
+  // to F♯, flats from D♭.
   const KEYS = [0, 1, 2, 3, 4, 5, 6, -5, -4, -3, -2, -1];
 
+  // The circle as the usual chart prints it. Same spots as KEYS, but with G♭
+  // at the bottom; F♯ is shown there as its second spelling.
+  const CHART = [0, 1, 2, 3, 4, 5, -6, -5, -4, -3, -2, -1];
+
   const CHOICES = [[1, '♯', 'sharp'], [0, '♮', 'natural'], [-1, '♭', 'flat']];
+  const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'];
 
   let root = null, streak = 0;
   const keyName = () => spell(root) + ' major';
 
-  // The key's note at a spot on the circle (0 = C at the top, clockwise), or
-  // undefined when that spot is outside the key.
-  function keyNoteAt(spot){
-    const p = root - 1 + mod(spot - root + 1, 12);
-    return p <= root + 5 ? p : undefined;
-  }
-
-  // The key's notes clockwise round the circle, from its 4 to its 7.
-  const arcNotes = () => Array.from({length: 7}, (_, k) => spell(root - 1 + k)).join(' ');
+  // The accidentals the key picks up on its way from C, in the order it does.
+  const signatureNotes = () =>
+    Array.from({length: Math.abs(root)}, (_, i) => addedAt(Math.sign(root), i + 1));
 
   function signature(){
     const n = Math.abs(root);
     return n ? `${n} ${root > 0 ? 'sharp' : 'flat'}${n > 1 ? 's' : ''}` : 'no sharps or flats';
   }
 
-  const list = xs => xs.length > 1 ? xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1] : xs[0];
+  const list = (xs, last = ' and ') =>
+    xs.length > 1 ? xs.slice(0, -1).join(', ') + last + xs[xs.length - 1] : xs[0];
 
   // ---------- DOM ----------
   const cardEl    = document.getElementById('kqCard');
@@ -160,39 +171,49 @@
 
   // ---------- explaining ----------
   const tok = (p, cls) => `<span class="deg${cls ? ' ' + cls : ''}">${spell(p)}</span>`;
+  // Its initials picked out, since they are the point: they spell the order.
+  const mnemonic = s => `<em class="kq-mnemonic">${s.replace(/(^|\s)(\w)/g, '$1<b>$2</b>')}</em>`;
+  // "the second step, G → D"
+  const stepName = ({dir, step}) =>
+    `the ${ORDINALS[step - 1]} step, ${spell(dir * (step - 1))} → ${spell(dir * step)}`;
 
   function explain(wrong){
+    const n = Math.abs(root), dir = Math.sign(root);
     const lines = [];
 
-    // A wrong accidental is always seven steps off along the line, so outside
-    // the key's arc — unless it wraps round to the pitch of a note the key
-    // already has under another letter (G♭ for F♯, E♯ for F, B♯ for C).
-    const outside = wrong.filter(a => keyNoteAt(mod(a.got, 12)) === undefined);
-    if(outside.length){
-      lines.push(`${list(outside.map(a => tok(a.got, 'miss')))} ${outside.length > 1 ? 'are' : 'is'} ` +
-                 `outside the arc — the arc has ${list(outside.map(a => tok(a.want, 'seek')))}.`);
-    }
-    for(const a of wrong){
-      const twin = keyNoteAt(mod(a.got, 12));
-      if(twin === undefined) continue;
-      lines.push(`${tok(a.got, 'miss')} sounds the same as ${tok(twin)}, which the arc already has. ` +
-                 `Each letter appears exactly once, so this one has to be ${tok(a.want, 'seek')}.`);
-    }
-
-    lines.push(`That arc is the key. A major key's seven notes sit side by side on the circle of fifths: ` +
-               `one step counter-clockwise of the root, the root, then five steps clockwise — ` +
-               `for ${keyName()}, <strong>${arcNotes()}</strong>.`);
-
-    const n = Math.abs(root);
-    if(!n){
-      lines.push(`C sits at the top of the circle, so ${keyName()} has no sharps or flats.`);
+    if(n){
+      lines.push(`${keyName()} is ${n} step${n > 1 ? 's' : ''} ${dir > 0 ? 'clockwise' : 'counter-clockwise'} ` +
+                 `from C. Each step that way adds a ${dir > 0 ? 'sharp' : 'flat'} — ` +
+                 `${list(signatureNotes().map(spell), ', then ')} — so ${keyName()} has ${signature()}.`);
     } else {
-      // Each step clockwise sharpens one more note and each step back flattens
-      // one: F♯ C♯ G♯ … and B♭ E♭ A♭ …, the circle itself again.
-      const accs = Array.from({length: n}, (_, k) => spell(root > 0 ? 6 + k : -2 - k));
-      lines.push(`Shortcut: ${spell(root)} is ${n} step${n > 1 ? 's' : ''} ` +
-                 `${root > 0 ? 'clockwise' : 'counter-clockwise'} from C, so ${keyName()} has ` +
-                 `${signature()}: ${list(accs)}.`);
+      lines.push(`${keyName()} sits at the top of the circle: no steps from C, so no sharps or flats.`);
+    }
+
+    for(const a of wrong){
+      const needed = stepOf(a.want), yours = stepOf(a.got);
+      if(needed){
+        lines.push(`${tok(a.want, 'seek')} is added at ${stepName(needed)} — so ${keyName()} has it.`);
+      }
+      // A wrong accidental is never among the key's own steps: it's either
+      // further round the same way, or on the other side of C.
+      if(yours && yours.dir === dir){
+        const past = yours.step - n;
+        lines.push(`${tok(a.got, 'miss')} isn't added until ${stepName(yours)} — ` +
+                   `${past} step${past > 1 ? 's' : ''} past ${keyName()}.`);
+      } else if(yours){
+        lines.push(`${tok(a.got, 'miss')} is a ${yours.dir > 0 ? 'sharp' : 'flat'}: those are added ` +
+                   `${yours.dir > 0 ? 'clockwise' : 'counter-clockwise'}, and it only comes in at ${stepName(yours)}.`);
+      }
+    }
+
+    // Each side's order and its sentence: for the key's own side, and for any
+    // side one of your accidentals strayed to.
+    const sides = new Set(wrong.map(a => stepOf(a.got)).filter(Boolean).map(s => s.dir));
+    if(dir) sides.add(dir);
+    for(const side of [1, -1].filter(s => sides.has(s))){
+      const order = Array.from({length: 7}, (_, i) => spell(addedAt(side, i + 1))).join(' ');
+      lines.push(`${side > 0 ? 'Sharps' : 'Flats'} always arrive in the same order, ${order} — ` +
+                 `${mnemonic(MNEMONICS[side])} — so knowing how many tells you which.`);
     }
     return lines.map(l => `<p>${l}</p>`).join('');
   }
@@ -206,70 +227,87 @@
     return e;
   }
 
-  // viewBox units. Spots count clockwise from C at the top, 30° apart; a
-  // fractional spot lets the arc start and end halfway between two notes.
-  const MID = 180, R = 116;
+  // viewBox units. Spots count clockwise from C at the top, 30° apart; the
+  // step pills sit just outside the ring.
+  const MID = 180;
+  const R_IN = 55, R_MID = 94, R_OUT = 136;
+  const R_MINOR = 74.5, R_MAJOR = 110, R_SECOND = 127, R_STEP = 158;
+
   function at(spot, r){
     const a = spot * Math.PI / 6;
     return {x: +(MID + r * Math.sin(a)).toFixed(1), y: +(MID - r * Math.cos(a)).toFixed(1)};
   }
 
-  function drawCircle(wrong){
-    const yours = new Map();                  // spot → your wrong spellings there
-    for(const a of wrong){
-      const spot = mod(a.got, 12);
-      yours.set(spot, (yours.get(spot) || []).concat(spell(a.got)));
+  // One 30° wedge of a ring.
+  function sector(spot, r0, r1){
+    const a = at(spot - .5, r1), b = at(spot + .5, r1), c = at(spot + .5, r0), d = at(spot - .5, r0);
+    return `M${a.x} ${a.y}A${r1} ${r1} 0 0 1 ${b.x} ${b.y}L${c.x} ${c.y}A${r0} ${r0} 0 0 0 ${d.x} ${d.y}Z`;
+  }
+
+  // A key name with its accidental raised and small, as the chart prints it.
+  // The sign's lift is in its own (smaller) ems, so whatever follows it — the
+  // m of a minor — drops back by the same distance in the parent's.
+  function label(parent, spot, r, cls, text){
+    const p = at(spot, r);
+    const t = el('text', {x: p.x, y: p.y, class: cls, 'dominant-baseline': 'central'}, text[0]);
+    if(text.length > 1){
+      if(/[♯♭]/.test(text[1])){
+        t.appendChild(el('tspan', {class: 'kq-sup', dy: '-.5em'}, text[1]));
+        if(text.length > 2) t.appendChild(el('tspan', {dy: '.34em'}, text.slice(2)));
+      } else {
+        t.appendChild(document.createTextNode(text.slice(1)));
+      }
     }
-    const needed = new Set(wrong.map(a => mod(a.want, 12)));
+    parent.appendChild(t);
+  }
 
+  function drawCircle(wrong){
     const frag = document.createDocumentFragment();
-    frag.appendChild(el('circle', {cx: MID, cy: MID, r: R, class: 'kq-ring'}));
-
-    // The key: seven spots, from half a step before its 4 to half past its 7.
-    // Always 210°, so both arcs take the long way round.
-    const ro = R + 25, ri = R - 25;
-    const a0 = at(root - 1.5, ro), a1 = at(root + 5.5, ro), b1 = at(root + 5.5, ri), b0 = at(root - 1.5, ri);
-    frag.appendChild(el('path', {class: 'kq-arc',
-      d: `M${a0.x} ${a0.y}A${ro} ${ro} 0 1 1 ${a1.x} ${a1.y}L${b1.x} ${b1.y}A${ri} ${ri} 0 1 0 ${b0.x} ${b0.y}Z`}));
 
     for(let spot = 0; spot < 12; spot++){
-      const p = keyNoteAt(spot), inKey = p !== undefined, mine = yours.get(spot);
-      // Inside the key a spot is spelled the key's way (E♯, not F, in F♯
-      // major); outside it, as whatever you wrote there, else as a key name.
-      const label = inKey ? spell(p) : mine ? mine.join('/') : spell(KEYS[spot]);
-      const cls = ['kq-node'];
-      if(inKey) cls.push('in');
-      if(p === root) cls.push('root');
-      if(needed.has(spot)) cls.push('needed');
-      if(mine && !inKey) cls.push('wrong');
+      const major = CHART[spot], minor = spell(major + 3) + 'm';   // relative minor: its 6th
+      const g = el('g', {class: 'kq-node' + (spot === mod(root, 12) ? ' key' : ''),
+        'data-note': spell(major), 'data-minor': minor});
+      g.appendChild(el('path', {class: 'kq-out', d: sector(spot, R_MID, R_OUT)}));
+      g.appendChild(el('path', {class: 'kq-in', d: sector(spot, R_IN, R_MID)}));
+      label(g, spot, R_MAJOR, 'kq-maj', spell(major));
+      // The spot's other spelling, where that's still a key of at most seven
+      // accidentals: C♭ beside B, F♯ beside G♭, C♯ beside D♭.
+      const second = major + (major > 0 ? -12 : 12);
+      if(Math.abs(second) <= 7){
+        g.setAttribute('data-second', spell(second));
+        label(g, spot, R_SECOND, 'kq-second', spell(second));
+      }
+      label(g, spot, R_MINOR, 'kq-min', minor);
+      frag.appendChild(g);
+    }
 
-      const g = el('g', {class: cls.join(' '), 'data-note': label});
-      const c = at(spot, R);
-      g.appendChild(el('circle', {cx: c.x, cy: c.y, r: 18}));
-      g.appendChild(el('text', {x: c.x, y: c.y, class: 'kq-name' + (label.length > 2 ? ' long' : ''),
-        'dominant-baseline': 'central'}, label));
-      if(inKey){
-        const d = at(spot, R - 38);
-        g.appendChild(el('text', {x: d.x, y: d.y, class: 'kq-num', 'dominant-baseline': 'central'},
-          DEGREE_STEPS.indexOf(p - root) + 1));
-      }
-      if(mine && inKey){
-        // You wrote this pitch, but under another letter — tag it on the
-        // outside rather than pretend the key's own note is wrong.
-        const t = at(spot, R + 42), tag = el('g', {class: 'kq-clash'});
-        tag.appendChild(el('rect', {x: t.x - 17, y: t.y - 10, width: 34, height: 20, rx: 6}));
-        tag.appendChild(el('text', {x: t.x, y: t.y, 'dominant-baseline': 'central'}, mine.join('/')));
-        g.appendChild(tag);
-      }
+    // The walk from C: a pill on each key it steps to, naming what that step
+    // adds; then each wrong accidental of yours, on the step that adds it.
+    const pills = signatureNotes().map(p => ({p, cls: wrong.some(a => a.want === p) ? ' missed' : ''}));
+    for(const a of wrong) if(stepOf(a.got)) pills.push({p: a.got, cls: ' extra'});
+    for(const pill of pills){
+      const s = stepOf(pill.p);
+      pill.spot = mod(s.dir * s.step, 12);
+    }
+    for(const pill of pills){
+      // Two on one key (a rare pairing like A♯ and F♭) sit side by side.
+      const shared = pills.filter(q => q.spot === pill.spot);
+      const nudge = shared.length > 1 ? (shared[0] === pill ? -.24 : .24) : 0;
+      const c = at(pill.spot + nudge, R_STEP);
+      const g = el('g', {class: 'kq-step' + pill.cls, 'data-note': spell(pill.p), 'data-at': spell(CHART[pill.spot])});
+      g.appendChild(el('rect', {x: c.x - 17, y: c.y - 10, width: 34, height: 20, rx: 10}));
+      g.appendChild(el('text', {x: c.x, y: c.y, 'dominant-baseline': 'central'}, '+' + spell(pill.p)));
       frag.appendChild(g);
     }
 
     frag.appendChild(el('text', {x: MID, y: MID - 7, class: 'kq-centre-key'}, keyName()));
-    frag.appendChild(el('text', {x: MID, y: MID + 15, class: 'kq-centre-sig'}, signature()));
+    frag.appendChild(el('text', {x: MID, y: MID + 13, class: 'kq-centre-sig'}, signature()));
 
     circleEl.innerHTML = '';
     circleEl.appendChild(frag);
-    circleEl.setAttribute('aria-label', `Circle of fifths with ${keyName()} highlighted: ${arcNotes()}.`);
+    circleEl.setAttribute('aria-label', `Circle of fifths with ${keyName()} highlighted: ${signature()}` +
+      (root ? `, added one per step from C: ${list(signatureNotes().map(spell))}` : '') + '.');
   }
 
   // ---------- init ----------

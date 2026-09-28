@@ -74,7 +74,7 @@ these specs are about.
 | `settings.spec.js` | Persistence round-trips, and that hand-edited or corrupt storage can't break startup |
 | `timeattack.spec.js` | Run chrome, the per-display-mode score buckets, leaderboard cleanup, and restoring the practice run underneath |
 | `hint.spec.js` | "How do I find it": which note it sends you to, and whether the route it describes is one the two moves can actually make |
-| `keyquiz.spec.js` | The key quiz at `/key-quiz` (a prototype, not linked from anywhere yet): every key's spelling checked against hand-written key signatures, scoring, and the circle-of-fifths explanation of a miss |
+| `keyquiz.spec.js` | The key quiz at `/key-quiz` (a prototype, not linked from anywhere yet): every key's spelling checked against hand-written key signatures, the circle itself against the standard printed chart, scoring, and the step-by-step explanation of a miss |
 
 ### Looking at one particular route
 

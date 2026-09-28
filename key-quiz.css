@@ -78,50 +78,51 @@
 .kq-why{ display:grid; gap:18px; align-items:start; border-color:rgba(251,113,133,.25); }
 .kq-why[hidden]{ display:none; }
 @media (min-width:720px){
-  .kq-why{ grid-template-columns:minmax(0, 330px) minmax(0, 1fr); }
+  .kq-why{ grid-template-columns:minmax(0, 380px) minmax(0, 1fr); }
 }
 
 .kq-fig{ margin:0; }
-.kq-fig svg{ display:block; width:100%; max-width:360px; height:auto; margin:0 auto; }
+.kq-fig svg{ display:block; width:100%; max-width:380px; height:auto; margin:0 auto; }
 .kq-legend{
   display:flex; flex-wrap:wrap; justify-content:center; gap:4px 14px; margin-top:8px;
   font-size:12px; line-height:1.5; color:var(--muted);
 }
 .kq-legend span{ display:inline-flex; align-items:center; gap:6px; }
-.kq-sw{ width:12px; height:12px; border-radius:50%; display:inline-block; }
-.kq-sw.arc{ border-radius:3px; background:rgba(34,211,238,.18); border:1px solid rgba(34,211,238,.55); }
-.kq-sw.miss{ background:rgba(251,113,133,.18); border:2px solid var(--miss); }
-.kq-sw.seek{ border:2px solid var(--seek); }
+.kq-sw{ display:inline-block; width:12px; height:12px; border-radius:3px; }
+.kq-sw.key{ background:var(--live); }
+.kq-sw.step, .kq-sw.seek, .kq-sw.miss{ width:20px; border-radius:6px; }
+.kq-sw.step{ background:var(--panel-3); border:1px solid var(--line-strong); }
+.kq-sw.seek{ background:rgba(251,191,36,.14); border:1.5px solid var(--seek); }
+.kq-sw.miss{ background:rgba(251,113,133,.14); border:1.5px dashed var(--miss); }
 
 .kq-explain p{ font-size:15.5px; line-height:1.65; margin:0 0 12px; }
-.kq-explain strong{ font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:.95em; white-space:nowrap; }
 .kq-why .kq-btn{ margin-top:6px; }
 .deg.miss{ color:var(--miss); border-color:rgba(251,113,133,.45); }
+.kq-mnemonic b{ color:var(--text); font-weight:700; }
 
-#kqCircle text{ font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; text-anchor:middle; }
-.kq-ring{ fill:none; stroke:var(--line-strong); stroke-width:1; }
-.kq-arc{ fill:rgba(34,211,238,.08); stroke:rgba(34,211,238,.4); stroke-width:1.2; }
+/* The chart itself: majors in the outer ring, relative minors in the inner
+   one, split into wedges by gaps in the card's own colour. */
+#kqCircle text{ font-family:'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif; text-anchor:middle; }
+.kq-out{ fill:var(--panel-3); stroke:var(--panel); stroke-width:2; }
+.kq-in{ fill:var(--panel-2); stroke:var(--panel); stroke-width:2; }
+.kq-maj{ fill:var(--text); font-size:17px; font-weight:700; }
+.kq-second{ fill:var(--muted); font-size:9.5px; font-weight:600; }
+.kq-min{ fill:var(--muted); font-size:11px; font-weight:600; }
+.kq-sup{ font-size:68%; }   /* the lift is set in key-quiz.js, in these ems */
+.kq-node.key .kq-out{ fill:var(--live); }
+.kq-node.key .kq-maj, .kq-node.key .kq-second{ fill:#04212a; }
 
-.kq-node circle{ fill:var(--panel-2); stroke:var(--line-strong); stroke-width:1.2; }
-.kq-node .kq-name{ fill:var(--dim); font-size:13px; font-weight:500; }
-.kq-node .kq-name.long{ font-size:10px; }
-.kq-node .kq-num{ fill:var(--dim); font-size:11px; }
-.kq-node.in circle{ fill:var(--panel-3); stroke:#4a5568; }
-.kq-node.in .kq-name{ fill:var(--text); font-weight:600; }
-.kq-node.root circle{ fill:var(--live); stroke:#8af0ff; }
-.kq-node.root .kq-name{ fill:#04212a; }
-.kq-node.root .kq-num{ fill:var(--live); }
-.kq-node.needed circle{ stroke:var(--seek); stroke-width:2.5; }
-.kq-node.wrong circle{ fill:rgba(251,113,133,.16); stroke:var(--miss); stroke-width:2; }
-.kq-node.wrong .kq-name{ fill:var(--miss); font-weight:600; }
-.kq-clash rect{ fill:#2a1519; stroke:var(--miss); stroke-width:1.2; }
-.kq-clash text{ fill:var(--miss); font-size:11.5px; font-weight:600; }
+/* The walk from C: what each step adds, the one you missed, and yours. */
+#kqCircle .kq-step text{ font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; }
+.kq-step rect{ fill:var(--panel-3); stroke:var(--line-strong); stroke-width:1; }
+.kq-step text{ fill:var(--text); font-size:11.5px; font-weight:600; }
+.kq-step.missed rect{ fill:rgba(251,191,36,.14); stroke:var(--seek); stroke-width:1.5; }
+.kq-step.missed text{ fill:var(--seek); }
+.kq-step.extra rect{ fill:rgba(251,113,133,.14); stroke:var(--miss); stroke-width:1.5; stroke-dasharray:3 2; }
+.kq-step.extra text{ fill:var(--miss); }
 
-#kqCircle .kq-centre-key{
-  font-family:'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
-  fill:var(--text); font-size:18px; font-weight:600;
-}
-.kq-centre-sig{ fill:var(--muted); font-size:11.5px; }
+.kq-centre-key{ fill:var(--text); font-size:15px; font-weight:600; }
+.kq-centre-sig{ fill:var(--muted); font-size:10.5px; }
 
 @media (max-width:560px){
   .kq-card, .kq-why{ padding:14px 12px; }
