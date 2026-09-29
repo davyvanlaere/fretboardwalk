@@ -1,33 +1,10 @@
 const { test, expect } = require('@playwright/test');
+const { notesIn } = require('../chart');
 
 // The key quiz (/key-quiz): name the seven notes of a major key, and on a miss
 // see why on the circle of fifths. ?key= pins the first question; later ones
 // are random, so a spec that goes past the first reads the key off the page
-// and looks it up in CHORD_CHART.
-
-// "Chords In All Major Keys", the reference chart, transcribed row by row: the
-// triads on I ii iii IV V vi vii° of every major key. Their roots are the
-// key's notes, so this is the answer key the quiz is held to — written out
-// from the chart, never derived the way the page derives it.
-const CHORD_CHART = {
-  'C':  ['C',  'Dm',  'Em',  'F',  'G',  'Am',  'B°'],
-  'C♯': ['C♯', 'D♯m', 'E♯m', 'F♯', 'G♯', 'A♯m', 'B♯°'],
-  'D♭': ['D♭', 'E♭m', 'Fm',  'G♭', 'A♭', 'B♭m', 'C°'],
-  'D':  ['D',  'Em',  'F♯m', 'G',  'A',  'Bm',  'C♯°'],
-  'E♭': ['E♭', 'Fm',  'Gm',  'A♭', 'B♭', 'Cm',  'D°'],
-  'E':  ['E',  'F♯m', 'G♯m', 'A',  'B',  'C♯m', 'D♯°'],
-  'F':  ['F',  'Gm',  'Am',  'B♭', 'C',  'Dm',  'E°'],
-  'F♯': ['F♯', 'G♯m', 'A♯m', 'B',  'C♯', 'D♯m', 'E♯°'],
-  'G♭': ['G♭', 'A♭m', 'B♭m', 'C♭', 'D♭', 'E♭m', 'F°'],
-  'G':  ['G',  'Am',  'Bm',  'C',  'D',  'Em',  'F♯°'],
-  'A♭': ['A♭', 'B♭m', 'Cm',  'D♭', 'E♭', 'Fm',  'G°'],
-  'A':  ['A',  'Bm',  'C♯m', 'D',  'E',  'F♯m', 'G♯°'],
-  'B♭': ['B♭', 'Cm',  'Dm',  'E♭', 'F',  'Gm',  'A°'],
-  'B':  ['B',  'C♯m', 'D♯m', 'E',  'F♯', 'G♯m', 'A♯°'],
-};
-
-// A key's notes: its chart row with each chord's quality (m, °) dropped.
-const notesIn = (key) => CHORD_CHART[key].map((chord) => chord.replace(/[m°]$/, ''));
+// and looks it up in the chord chart (../chart.js).
 
 // The keys the quiz asks — the trainer's twelve. That's the whole chart but
 // C♯ and G♭, whose twins D♭ and F♯ it spells instead.
@@ -148,6 +125,22 @@ test.describe('key quiz', () => {
     await expect(page.getByRole('radio')).toHaveCount(18);
   });
 
+  test('a picked button shows as picked even with the pointer still on it', async ({ page }) => {
+    await open(page, 'D');
+    await page.getByRole('radio', { name: 'F sharp', exact: true }).check();   // pointer left on it, as after a tap
+    // --live, the picked colour. toHaveCSS waits out the colour transition.
+    await expect(page.locator('.kq-slot[data-letter="F"] input[value="1"] + span'))
+      .toHaveCSS('border-top-color', 'rgb(34, 211, 238)');
+  });
+
+  test('the ♯ ♮ ♭ buttons keep their size, with larger signs on them', async ({ page }) => {
+    await open(page, 'D');
+    for (const face of await page.locator('.kq-acc span').all()) {
+      expect(Math.round((await face.boundingBox()).height)).toBe(38);
+      expect(await face.evaluate((e) => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThan(17);
+    }
+  });
+
   test('a right answer scores and moves straight on to another key', async ({ page }) => {
     await open(page, 'D');
     await answer(page, notesIn('D'));
@@ -218,7 +211,7 @@ test.describe('key quiz', () => {
       'D major is 2 steps clockwise from C. Each step that way adds a sharp — F♯, then C♯ — so D major has 2 sharps.');
     await expect(why).toContainText('F♯ is added at the first step, C → G — so D major has it.');
     await expect(why).toContainText(SHARPS_ORDER);
-    await expect(why).not.toContainText('Battle Ends');
+    await expect(why).not.toContainText('Battle Ends And Down Goes Charles');
   });
 
   test('after a miss, Next asks a different key', async ({ page }) => {
@@ -247,7 +240,7 @@ test.describe('key quiz', () => {
       'E♭ major is 3 steps counter-clockwise from C. Each step that way adds a flat — B♭, E♭, then A♭ — so E♭ major has 3 flats.');
     await expect(why).toContainText('A♭ is added at the third step, B♭ → E♭ — so E♭ major has it.');
     await expect(why).toContainText(FLATS_ORDER);
-    await expect(why).not.toContainText('Father Charles');
+    await expect(why).not.toContainText('Father Charles Goes Down And Ends Battle');
   });
 
   test('F♯ major is six steps round, the last one adding E♯', async ({ page }) => {
@@ -299,6 +292,6 @@ test.describe('key quiz', () => {
     await expect(why).toContainText(
       'F♯ is a sharp: those are added clockwise, and it only comes in at the first step, C → G.');
     await expect(why).toContainText(SHARPS_ORDER);
-    await expect(why).not.toContainText('Battle Ends');
+    await expect(why).not.toContainText('Battle Ends And Down Goes Charles');
   });
 });

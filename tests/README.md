@@ -74,7 +74,9 @@ these specs are about.
 | `settings.spec.js` | Persistence round-trips, and that hand-edited or corrupt storage can't break startup |
 | `timeattack.spec.js` | Run chrome, the per-display-mode score buckets, leaderboard cleanup, and restoring the practice run underneath |
 | `hint.spec.js` | "How do I find it": which note it sends you to, and whether the route it describes is one the two moves can actually make |
-| `keyquiz.spec.js` | The key quiz at `/key-quiz` (a prototype, not linked from anywhere yet): every key it asks checked against a transcribed "Chords In All Major Keys" chart — pinned one at a time, then at random until every key has come up — the circle itself against the standard printed chart, scoring, and the step-by-step explanation of a miss |
+| `keyquiz.spec.js` | The key quiz at `/key-quiz`: every key it asks checked against a transcribed "Chords In All Major Keys" chart — pinned one at a time, then at random until every key has come up — the circle itself against the standard printed chart, scoring, and the step-by-step explanation of a miss |
+| `keysignatures.spec.js` | The Father Charles guide at `/key-signatures`: every chart key's sharps or flats from the sentence, where each rule stops, the worked example's key switching, and the quiz's link into it |
+| `toolbox.spec.js` | The guitarist's toolbox at `/toolbox`: each tool introduced and opening, and the new pages all in the sitemap without a contradicting `noindex` |
 
 ### Looking at one particular route
 
@@ -99,7 +101,9 @@ same URLs are the quickest way to look at a route by hand.
 `/key-quiz` picks its keys at random too, and `?key=` pins the first one,
 spelled in ASCII — `/key-quiz?key=Eb`, `/key-quiz?key=F%23` (a bare `#` would
 start the URL fragment). Questions after the first are random again, so a spec
-that goes further reads the key off the page.
+that goes further reads the key off the page and looks it up in `chart.js` — the
+"Chords In All Major Keys" chart both key specs are held to. `/key-signatures`
+takes the same `?key=` for its worked example; it's how the quiz links there.
 
 ## `genchords.js`
 

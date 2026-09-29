@@ -1,0 +1,27 @@
+/* The guitarist's toolbox: one card per tool, on the guide pages' shell
+   (help.css supplies .card, .deg, .cta and the type). */
+
+.tb-tool{ margin:26px 0; padding:22px 22px 20px; }
+.tb-tool h2{ margin:2px 0 6px; }
+.tb-tool ul{ margin:14px 0; }
+.tb-tool li{ font-size:15.5px; }
+
+.tb-kind{
+  margin:0; font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--seek);
+}
+.tb-what{ font-size:17px; color:var(--muted); margin:0 0 14px; }
+
+/* A taste of what the tool shows, in the same note tokens the tools use. */
+.tb-sample{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.tb-sample .deg{ font-size:14px; padding:3px 9px; }
+.tb-sample-note{ font-size:12.5px; color:var(--dim); margin-left:4px; }
+
+.tb-why{ font-size:15px; color:var(--muted); }
+.tb-open{
+  display:inline-block; margin-top:4px; text-decoration:none; font-weight:600; font-size:15px;
+  color:#04212a; background:var(--live); border:1px solid var(--live);
+  padding:11px 20px; border-radius:10px;
+}
+.tb-open:hover{ background:#4fe0f4; }
+.tb-also{ font-size:14px; color:var(--muted); margin:14px 0 0; }

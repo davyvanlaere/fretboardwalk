@@ -47,10 +47,12 @@
 .kq-acc span{
   display:flex; align-items:center; justify-content:center; height:38px;
   background:var(--panel-3); border:1px solid var(--line-strong); border-radius:9px;
-  color:var(--muted); font-size:17px;
+  color:var(--muted); font-size:22px;   /* the sign, not the button: that stays 38px */
   transition:background .12s, border-color .12s, color .12s;
 }
-.kq-acc input:enabled:hover + span{ color:var(--text); border-color:var(--muted); }
+/* Hover only ever previews an unpicked button: on a phone it sticks after a
+   tap, and would otherwise hide the pick that tap just made. */
+.kq-acc input:enabled:not(:checked):hover + span{ color:var(--text); border-color:var(--muted); }
 .kq-acc input:checked + span{ color:var(--live); border-color:var(--live); background:rgba(34,211,238,.1); }
 .kq-acc input:focus-visible + span{ outline:2px solid var(--live); outline-offset:2px; }
 

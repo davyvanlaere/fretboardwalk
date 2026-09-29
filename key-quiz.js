@@ -2,30 +2,12 @@
   "use strict";
 
   // ---------- the music ----------
-  // One number does all the work: a note's place on the line of fifths. C is
-  // 0; each fifth up is +1 (G 1, D 2 … F♯ 6, C♯ 7) and each fifth down −1
-  // (F −1, B♭ −2 … G♭ −6). For a key's root that number IS its key signature
-  // — +2 is two sharps, −3 three flats — and the circle of fifths is the same
-  // line wrapped round at 12. Spelling, key signature and the diagram all fall
-  // out of that, so there is no per-key table to get wrong.
-  const LETTERS = 'FCGDAEB';                 // the naturals, at −1 … 5
-  const SIGN = {'-1':'♭', '0':'', '1':'♯'};
-  const mod = (n, m) => ((n % m) + m) % m;
+  // Spelling and key signatures are fifths.js, shared with the key signatures
+  // guide: every note is a place on the line of fifths.
+  const {mod, letterOf, spell, posOf, scaleOf, signatureOf, MNEMONICS, ascii, howMany, list} = window.Fifths;
 
-  const letterOf = p => LETTERS[mod(p + 1, 7)];
-  const spell    = p => letterOf(p) + SIGN[Math.floor((p + 1) / 7)];
-  const posOf    = (letter, acc) => LETTERS.indexOf(letter) - 1 + 7 * acc;
-
-  // Degrees 1–7 as steps from the root along that line, in scale order.
-  const DEGREE_STEPS = [0, 2, 4, -1, 1, 3, 5];
-
-  // Walking round the circle from C, each step clockwise adds one sharp (the
-  // new key's 7th) and each step counter-clockwise one flat (the new key's
-  // 4th): F♯ C♯ G♯ D♯ A♯ E♯ B♯ one way, B♭ E♭ A♭ D♭ G♭ C♭ F♭ the other.
-  const addedAt = (dir, step) => dir > 0 ? 5 + step : -1 - step;
-  // Both orders are usually remembered as one sentence, read both ways.
-  const MNEMONICS = {'1': 'Father Charles Goes Down And Ends Battle', '-1': "Battle Ends And Down Goes Charles's Father"};
-  // The reverse: the step that brings an accidental in, or null for a natural.
+  // The reverse of Fifths.addedAt: the step that brings an accidental in, or
+  // null for a natural.
   function stepOf(p){
     if(p >= 6) return {dir: 1, step: p - 5};
     if(p <= -2) return {dir: -1, step: -1 - p};
@@ -45,19 +27,6 @@
 
   let root = null, streak = 0;
   const keyName = () => spell(root) + ' major';
-  const scale = () => DEGREE_STEPS.map(s => root + s);
-
-  // The accidentals the key picks up on its way from C, in the order it does.
-  const signatureNotes = () =>
-    Array.from({length: Math.abs(root)}, (_, i) => addedAt(Math.sign(root), i + 1));
-
-  function signature(){
-    const n = Math.abs(root);
-    return n ? `${n} ${root > 0 ? 'sharp' : 'flat'}${n > 1 ? 's' : ''}` : 'no sharps or flats';
-  }
-
-  const list = (xs, last = ' and ') =>
-    xs.length > 1 ? xs.slice(0, -1).join(', ') + last + xs[xs.length - 1] : xs[0];
 
   // ---------- DOM ----------
   const cardEl    = document.getElementById('kqCard');
@@ -78,7 +47,7 @@
   // each letter once, so the letters are given and only the accidentals are
   // asked — which is exactly the question the circle of fifths answers.
   function renderSlots(){
-    slotsEl.innerHTML = scale().map((p, i) => {
+    slotsEl.innerHTML = scaleOf(root).map((p, i) => {
       const letter = letterOf(p);
       if(i === 0){
         // The question already names the root, so it isn't asked for.
@@ -133,7 +102,7 @@
     if(checkEl.disabled) return;
     checkEl.disabled = true;
 
-    const notes = scale();
+    const notes = scaleOf(root);
     const answer = [...slotsEl.children].map((slot, i) => {
       const want = notes[i];
       const picked = slot.querySelector('input:checked');
@@ -153,7 +122,7 @@
     const wrong = answer.filter(a => a.got !== a.want);
     if(!wrong.length){
       setStreak(streak + 1);
-      say('ok', `Right — ${keyName()} is ${scale().map(spell).join(' ')}.`);
+      say('ok', `Right — ${keyName()} is ${scaleOf(root).map(spell).join(' ')}.`);
       setTimeout(nextKey, 1200);
       return;
     }
@@ -163,7 +132,7 @@
     drawCircle(wrong);
     // The right answer in full under the circle, the ones you missed in amber.
     // No key name in front: the circle's centre already says it.
-    scaleEl.innerHTML = scale().map(p =>
+    scaleEl.innerHTML = scaleOf(root).map(p =>
       tok(p, p === root ? 'root' : wrong.some(a => a.want === p) ? 'seek' : '')).join(' ');
     explainEl.innerHTML = explain(wrong);
     whyEl.hidden = false;
@@ -191,7 +160,7 @@
     if(n){
       lines.push(`${keyName()} is ${n} step${n > 1 ? 's' : ''} ${dir > 0 ? 'clockwise' : 'counter-clockwise'} ` +
                  `from C. Each step that way adds a ${dir > 0 ? 'sharp' : 'flat'} — ` +
-                 `${list(signatureNotes().map(spell), ', then ')} — so ${keyName()} has ${signature()}.`);
+                 `${list(signatureOf(root).map(spell), ', then ')} — so ${keyName()} has ${howMany(root)}.`);
     } else {
       lines.push(`${keyName()} sits at the top of the circle: no steps from C, so no sharps or flats.`);
     }
@@ -218,10 +187,13 @@
     const sides = new Set(wrong.map(a => stepOf(a.got)).filter(Boolean).map(s => s.dir));
     if(dir) sides.add(dir);
     for(const side of [1, -1].filter(s => sides.has(s))){
-      const order = Array.from({length: 7}, (_, i) => spell(addedAt(side, i + 1))).join(' ');
+      const order = signatureOf(7 * side).map(spell).join(' ');
       lines.push(`${side > 0 ? 'Sharps' : 'Flats'} always arrive in the same order, ${order} — ` +
                  `${mnemonic(MNEMONICS[side])} — so knowing how many tells you which.`);
     }
+    // Where the sentences are explained properly, with this key already picked.
+    lines.push(`<a href="/key-signatures?key=${encodeURIComponent(ascii(root))}">` +
+               `The Father Charles approach, in full →</a>`);
     return lines.map(l => `<p>${l}</p>`).join('');
   }
 
@@ -291,7 +263,7 @@
 
     // The walk from C: a pill on each key it steps to, naming what that step
     // adds; then each wrong accidental of yours, on the step that adds it.
-    const pills = signatureNotes().map(p => ({p, cls: wrong.some(a => a.want === p) ? ' missed' : ''}));
+    const pills = signatureOf(root).map(p => ({p, cls: wrong.some(a => a.want === p) ? ' missed' : ''}));
     for(const a of wrong) if(stepOf(a.got)) pills.push({p: a.got, cls: ' extra'});
     for(const pill of pills){
       const s = stepOf(pill.p);
@@ -309,19 +281,19 @@
     }
 
     frag.appendChild(el('text', {x: MID, y: MID - 7, class: 'kq-centre-key'}, keyName()));
-    frag.appendChild(el('text', {x: MID, y: MID + 13, class: 'kq-centre-sig'}, signature()));
+    frag.appendChild(el('text', {x: MID, y: MID + 13, class: 'kq-centre-sig'}, howMany(root)));
 
     circleEl.innerHTML = '';
     circleEl.appendChild(frag);
-    circleEl.setAttribute('aria-label', `Circle of fifths with ${keyName()} highlighted: ${signature()}` +
-      (root ? `, added one per step from C: ${list(signatureNotes().map(spell))}` : '') + '.');
+    circleEl.setAttribute('aria-label', `Circle of fifths with ${keyName()} highlighted: ${howMany(root)}` +
+      (root ? `, added one per step from C: ${list(signatureOf(root).map(spell))}` : '') + '.');
   }
 
   // ---------- init ----------
   // ?key=D, ?key=Eb, ?key=F%23 pins the first question — for specs, and for
   // looking at one key's explanation by hand.
   const pinned = new URLSearchParams(location.search).get('key');
-  const asked = KEYS.find(p => spell(p).replace('♯', '#').replace('♭', 'b') === pinned);
+  const asked = KEYS.find(p => ascii(p) === pinned);
   ask(asked !== undefined ? asked : randomKey());
 
 })();
