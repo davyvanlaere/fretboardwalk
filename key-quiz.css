@@ -83,6 +83,13 @@
 
 .kq-fig{ margin:0; }
 .kq-fig svg{ display:block; width:100%; max-width:380px; height:auto; margin:0 auto; }
+/* The right answer in full, straight under the circle. */
+.kq-scale{
+  display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px;
+  margin:10px 0 0;
+}
+.kq-scale .deg{ font-size:14px; padding:2px 8px; }
+
 .kq-legend{
   display:flex; flex-wrap:wrap; justify-content:center; gap:4px 14px; margin-top:8px;
   font-size:12px; line-height:1.5; color:var(--muted);

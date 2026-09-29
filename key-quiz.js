@@ -45,6 +45,7 @@
 
   let root = null, streak = 0;
   const keyName = () => spell(root) + ' major';
+  const scale = () => DEGREE_STEPS.map(s => root + s);
 
   // The accidentals the key picks up on its way from C, in the order it does.
   const signatureNotes = () =>
@@ -68,6 +69,7 @@
   const verdictEl = document.getElementById('kqVerdict');
   const whyEl     = document.getElementById('kqWhy');
   const circleEl  = document.getElementById('kqCircle');
+  const scaleEl   = document.getElementById('kqScale');
   const explainEl = document.getElementById('kqExplain');
   const nextEl    = document.getElementById('kqNext');
 
@@ -76,8 +78,8 @@
   // each letter once, so the letters are given and only the accidentals are
   // asked — which is exactly the question the circle of fifths answers.
   function renderSlots(){
-    slotsEl.innerHTML = DEGREE_STEPS.map((step, i) => {
-      const letter = letterOf(root + step);
+    slotsEl.innerHTML = scale().map((p, i) => {
+      const letter = letterOf(p);
       if(i === 0){
         // The question already names the root, so it isn't asked for.
         return `<div class="kq-slot root" data-letter="${letter}"><div class="kq-note">${spell(root)}</div>` +
@@ -131,8 +133,9 @@
     if(checkEl.disabled) return;
     checkEl.disabled = true;
 
+    const notes = scale();
     const answer = [...slotsEl.children].map((slot, i) => {
-      const want = root + DEGREE_STEPS[i];
+      const want = notes[i];
       const picked = slot.querySelector('input:checked');
       return {slot, want, got: picked ? posOf(slot.dataset.letter, +picked.value) : want};
     });
@@ -150,7 +153,7 @@
     const wrong = answer.filter(a => a.got !== a.want);
     if(!wrong.length){
       setStreak(streak + 1);
-      say('ok', `Right — ${keyName()} is ${DEGREE_STEPS.map(s => spell(root + s)).join(' ')}.`);
+      say('ok', `Right — ${keyName()} is ${scale().map(spell).join(' ')}.`);
       setTimeout(nextKey, 1200);
       return;
     }
@@ -158,6 +161,10 @@
     say('miss', `Not quite — ${keyName()} has ${list(wrong.map(a => spell(a.want)))}, ` +
                 `not ${list(wrong.map(a => spell(a.got)))}.`);
     drawCircle(wrong);
+    // The right answer in full under the circle, the ones you missed in amber.
+    // No key name in front: the circle's centre already says it.
+    scaleEl.innerHTML = scale().map(p =>
+      tok(p, p === root ? 'root' : wrong.some(a => a.want === p) ? 'seek' : '')).join(' ');
     explainEl.innerHTML = explain(wrong);
     whyEl.hidden = false;
     whyEl.scrollIntoView({block: 'nearest'});

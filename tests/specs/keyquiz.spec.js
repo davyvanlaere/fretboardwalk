@@ -3,25 +3,39 @@ const { test, expect } = require('@playwright/test');
 // The key quiz (/key-quiz): name the seven notes of a major key, and on a miss
 // see why on the circle of fifths. ?key= pins the first question; later ones
 // are random, so a spec that goes past the first reads the key off the page
-// and looks it up in KEYS.
+// and looks it up in CHORD_CHART.
 
-// Written out by hand from the key signatures rather than derived the way the
-// page derives them, so the page is checked against theory, not against its
-// own arithmetic.
-const KEYS = {
-  'C major':  ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
-  'G major':  ['G', 'A', 'B', 'C', 'D', 'E', 'F♯'],
-  'D major':  ['D', 'E', 'F♯', 'G', 'A', 'B', 'C♯'],
-  'A major':  ['A', 'B', 'C♯', 'D', 'E', 'F♯', 'G♯'],
-  'E major':  ['E', 'F♯', 'G♯', 'A', 'B', 'C♯', 'D♯'],
-  'B major':  ['B', 'C♯', 'D♯', 'E', 'F♯', 'G♯', 'A♯'],
-  'F♯ major': ['F♯', 'G♯', 'A♯', 'B', 'C♯', 'D♯', 'E♯'],
-  'D♭ major': ['D♭', 'E♭', 'F', 'G♭', 'A♭', 'B♭', 'C'],
-  'A♭ major': ['A♭', 'B♭', 'C', 'D♭', 'E♭', 'F', 'G'],
-  'E♭ major': ['E♭', 'F', 'G', 'A♭', 'B♭', 'C', 'D'],
-  'B♭ major': ['B♭', 'C', 'D', 'E♭', 'F', 'G', 'A'],
-  'F major':  ['F', 'G', 'A', 'B♭', 'C', 'D', 'E'],
+// "Chords In All Major Keys", the reference chart, transcribed row by row: the
+// triads on I ii iii IV V vi vii° of every major key. Their roots are the
+// key's notes, so this is the answer key the quiz is held to — written out
+// from the chart, never derived the way the page derives it.
+const CHORD_CHART = {
+  'C':  ['C',  'Dm',  'Em',  'F',  'G',  'Am',  'B°'],
+  'C♯': ['C♯', 'D♯m', 'E♯m', 'F♯', 'G♯', 'A♯m', 'B♯°'],
+  'D♭': ['D♭', 'E♭m', 'Fm',  'G♭', 'A♭', 'B♭m', 'C°'],
+  'D':  ['D',  'Em',  'F♯m', 'G',  'A',  'Bm',  'C♯°'],
+  'E♭': ['E♭', 'Fm',  'Gm',  'A♭', 'B♭', 'Cm',  'D°'],
+  'E':  ['E',  'F♯m', 'G♯m', 'A',  'B',  'C♯m', 'D♯°'],
+  'F':  ['F',  'Gm',  'Am',  'B♭', 'C',  'Dm',  'E°'],
+  'F♯': ['F♯', 'G♯m', 'A♯m', 'B',  'C♯', 'D♯m', 'E♯°'],
+  'G♭': ['G♭', 'A♭m', 'B♭m', 'C♭', 'D♭', 'E♭m', 'F°'],
+  'G':  ['G',  'Am',  'Bm',  'C',  'D',  'Em',  'F♯°'],
+  'A♭': ['A♭', 'B♭m', 'Cm',  'D♭', 'E♭', 'Fm',  'G°'],
+  'A':  ['A',  'Bm',  'C♯m', 'D',  'E',  'F♯m', 'G♯°'],
+  'B♭': ['B♭', 'Cm',  'Dm',  'E♭', 'F',  'Gm',  'A°'],
+  'B':  ['B',  'C♯m', 'D♯m', 'E',  'F♯', 'G♯m', 'A♯°'],
 };
+
+// A key's notes: its chart row with each chord's quality (m, °) dropped.
+const notesIn = (key) => CHORD_CHART[key].map((chord) => chord.replace(/[m°]$/, ''));
+
+// The keys the quiz asks — the trainer's twelve. That's the whole chart but
+// C♯ and G♭, whose twins D♭ and F♯ it spells instead.
+const QUIZ_KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'D♭', 'A♭', 'E♭', 'B♭', 'F'];
+
+// A sure miss in any key: its 4th knocked off the right spelling, a natural
+// sharpened and anything else made natural.
+const spoil = (notes) => notes.map((n, i) => (i !== 3 ? n : n.length === 1 ? n + '♯' : n[0]));
 
 // The circle as it's printed on the usual chart: majors round the outside,
 // with G♭ at the bottom, B/C♭, G♭/F♯ and D♭/C♯ as second spellings, and the
@@ -53,6 +67,15 @@ async function answer(page, notes) {
   await page.getByRole('button', { name: 'Check' }).click();
 }
 
+// A right answer moves on to the next key after 1.2s, clearing the verdict.
+// With the page's clock stopped it stays up for as long as a spec needs to
+// read it — and a failure shows the wrong verdict rather than an empty one.
+// page.clock.runFor(1200) moves on.
+async function stopClock(page) {
+  await page.clock.install();
+  await page.clock.pauseAt(Date.now() + 1000);
+}
+
 // Major keys on the circle's wedges matching `state`, clockwise from the top.
 const onCircle = (page, state) => page.locator(`#kqCircle .kq-node${state}`)
   .evaluateAll((els) => els.map((e) => e.dataset.note));
@@ -62,16 +85,61 @@ const onCircle = (page, state) => page.locator(`#kqCircle .kq-node${state}`)
 const steps = (page, state) => page.locator(`#kqCircle .kq-step${state}`)
   .evaluateAll((els) => els.map((e) => [e.dataset.at, e.dataset.note]));
 
-test.describe('key quiz', () => {
-  test('knows the notes of every key the trainer uses', async ({ page }) => {
-    for (const [key, notes] of Object.entries(KEYS)) {
-      await open(page, notes[0]);
-      await expect(page.locator('#kqKey')).toHaveText(key);
-      await answer(page, notes);
-      await expect(page.locator('#kqVerdict')).toHaveText(`Right — ${key} is ${notes.join(' ')}.`);
-    }
-  });
+test.describe('every key the quiz asks, against the chord chart', () => {
+  for (const key of QUIZ_KEYS) {
+    const notes = notesIn(key);
 
+    test(`${key} major: ${notes.join(' ')}`, async ({ page }) => {
+      await stopClock(page);
+
+      // Answered straight off the chart, it's right — one column per note.
+      await open(page, key);
+      await expect(page.locator('#kqKey')).toHaveText(`${key} major`);
+      const letters = await page.locator('.kq-slot').evaluateAll((els) => els.map((e) => e.dataset.letter));
+      expect(letters).toEqual(notes.map((n) => n[0]));
+      await answer(page, notes);
+      await expect(page.locator('#kqVerdict')).toHaveText(`Right — ${key} major is ${notes.join(' ')}.`);
+
+      // Missed, the answer shown under the circle is the chart's, and the walk
+      // from C adds exactly the chart's sharps or flats.
+      await open(page, key);
+      await answer(page, spoil(notes));
+      await expect(page.locator('#kqScale')).toHaveText(notes.join(' '));
+      const walked = (await steps(page, ':not(.extra)')).map(([, note]) => note);
+      expect(walked.sort()).toEqual(notes.filter((n) => n.length > 1).sort());
+    });
+  }
+
+  test('whichever key comes up, the chart\'s notes are right — every time', async ({ page }) => {
+    // Moving on by hand rather than waiting 1.2s a time, so this can keep
+    // going until every key has come up at random.
+    await stopClock(page);
+    await page.goto('/key-quiz');
+
+    const seen = new Set();
+    for (let round = 1; seen.size < QUIZ_KEYS.length; round++) {
+      expect(round, `after ${round - 1} rounds only saw ${[...seen].join(' ')}`).toBeLessThan(200);
+      const asked = await page.locator('#kqKey').textContent();
+      const key = asked.replace(' major', '');
+      expect(QUIZ_KEYS).toContain(key);
+
+      await answer(page, notesIn(key));
+      await expect(page.locator('#kqVerdict')).toHaveText(`Right — ${asked} is ${notesIn(key).join(' ')}.`);
+      await expect(page.locator('#kqStreak')).toHaveText(String(round));
+      seen.add(key);
+
+      await page.clock.runFor(1200);
+      await expect(page.locator('#kqKey')).not.toHaveText(asked);
+    }
+
+    // And one miss ends the run.
+    const key = (await page.locator('#kqKey').textContent()).replace(' major', '');
+    await answer(page, spoil(notesIn(key)));
+    await expect(page.locator('#kqStreak')).toHaveText('0');
+  });
+});
+
+test.describe('key quiz', () => {
   test('the root comes from the question, so only the other six letters are asked', async ({ page }) => {
     await open(page, 'B♭');
     const letters = await page.locator('.kq-slot').evaluateAll((els) => els.map((e) => e.dataset.letter));
@@ -82,7 +150,7 @@ test.describe('key quiz', () => {
 
   test('a right answer scores and moves straight on to another key', async ({ page }) => {
     await open(page, 'D');
-    await answer(page, KEYS['D major']);
+    await answer(page, notesIn('D'));
 
     await expect(page.locator('#kqStreak')).toHaveText('1');
     await expect(page.locator('#kqKey')).not.toHaveText('D major');
@@ -91,23 +159,6 @@ test.describe('key quiz', () => {
     await expect(page.getByRole('button', { name: 'Check' })).toBeEnabled();
     const picked = await page.locator('#kqSlots input:checked').evaluateAll((els) => els.map((e) => e.value));
     expect(picked).toEqual(['0', '0', '0', '0', '0', '0']);
-  });
-
-  test('the streak builds across random keys and a miss resets it', async ({ page }) => {
-    await open(page, 'C');
-    for (let i = 1; i <= 3; i++) {
-      const key = await page.locator('#kqKey').textContent();
-      await answer(page, KEYS[key]);
-      await expect(page.locator('#kqStreak')).toHaveText(String(i));
-      await expect(page.locator('#kqKey')).not.toHaveText(key);
-    }
-
-    // Spoil the 4th: a natural one sharpened, or a flat one made natural, is
-    // wrong in every major key.
-    const notes = [...KEYS[await page.locator('#kqKey').textContent()]];
-    notes[3] = notes[3].length === 1 ? notes[3] + '♯' : notes[3][0];
-    await answer(page, notes);
-    await expect(page.locator('#kqStreak')).toHaveText('0');
   });
 
   test('the circle is the standard chart, whichever key is asked', async ({ page }) => {
@@ -143,6 +194,24 @@ test.describe('key quiz', () => {
     // C → G adds F♯, G → D adds C♯; the F♯ you missed is the one picked out.
     expect(await steps(page, '')).toEqual([['G', 'F♯'], ['D', 'C♯']]);
     expect(await steps(page, '.missed')).toEqual([['G', 'F♯']]);
+
+    // Under the circle, the right answer in full, the note you missed picked
+    // out. Just the notes: the circle already names the key.
+    const scale = page.locator('#kqScale');
+    await expect(scale).toHaveText('D E F♯ G A B C♯');
+    expect(await scale.locator('.deg.seek').allTextContents()).toEqual(['F♯']);
+    // Straight under it and centred on it. Measured in one go: a miss scrolls
+    // the page down to the explanation, so separate reads can straddle that.
+    const place = await page.evaluate(() => {
+      const circle = document.getElementById('kqCircle').getBoundingClientRect();
+      const notes = [...document.querySelectorAll('#kqScale .deg')].map((n) => n.getBoundingClientRect());
+      return {
+        gap: notes[0].top - circle.bottom,
+        offCentre: (notes[0].left + notes[notes.length - 1].right) / 2 - (circle.left + circle.width / 2),
+      };
+    });
+    expect(place.gap).toBeGreaterThanOrEqual(0);
+    expect(Math.abs(place.offCentre)).toBeLessThan(2);
 
     const why = page.locator('#kqExplain');
     await expect(why).toContainText(
@@ -203,6 +272,8 @@ test.describe('key quiz', () => {
     await expect(page.locator('#kqVerdict')).toHaveText('Not quite — D major has E and G, not E♭ and G♯.');
     expect(await steps(page, '.missed')).toEqual([]);
     expect(await steps(page, '.extra')).toEqual([['B♭', 'E♭'], ['A', 'G♯']]);
+    // Plain E and G were the right answers there, so those are picked out.
+    expect(await page.locator('#kqScale .deg.seek').allTextContents()).toEqual(['E', 'G']);
 
     const why = page.locator('#kqExplain');
     await expect(why).toContainText(
