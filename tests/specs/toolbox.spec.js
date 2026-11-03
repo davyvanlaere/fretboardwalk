@@ -22,7 +22,7 @@ test.describe('guitarist toolbox', () => {
     await expect(page.locator('#kqKey')).toHaveText(/ major$/);   // a question waiting
   });
 
-  test('the toolbox, both tools and the key signatures guide are in the sitemap, and open to search', async ({ page, request }) => {
+  test('the toolbox, every tool and the key signatures guide are in the sitemap, and open to search', async ({ page, request }) => {
     const sitemap = await (await request.get('/sitemap.xml')).text();
     for (const slug of ['toolbox', 'shape-explorer', 'key-quiz', 'key-signatures']) {
       expect(sitemap).toContain(`<loc>https://www.fretboardwalk.com/${slug}</loc>`);

@@ -77,6 +77,7 @@ these specs are about.
 | `keyquiz.spec.js` | The key quiz at `/key-quiz`: every key it asks checked against a transcribed "Chords In All Major Keys" chart — pinned one at a time, then at random until every key has come up — the circle itself against the standard printed chart, scoring, and the step-by-step explanation of a miss |
 | `keysignatures.spec.js` | The Father Charles guide at `/key-signatures`: every chart key's sharps or flats from the sentence, where each rule stops, the worked example's key switching, and the quiz's link into it |
 | `toolbox.spec.js` | The guitarist's toolbox at `/toolbox`: each tool introduced and opening, and the new pages all in the sitemap without a contradicting `noindex` |
+| `fretscience.spec.js` | The virtual neck at `/fretscience` — served, but not announced yet, so the spec also pins it out of the sitemap and off the toolbox: the strings really a fourth apart, the guitar's own six centred in them, A minor pentatonic lit exactly where the scale is, and the two overlays read back as geometry — the primary box always three strings and two frets, the secondary one always two strings and three frets, every box maximal, a part-tile drawn wherever an edge cuts one, and no note left outside one — at every string count the page offers, and again with `?tuning=guitar`, where the tiles crossing the B string come out bent |
 
 ### Looking at one particular route
 
@@ -97,6 +98,17 @@ direction. Both parameters are ignored unless they name a real square or an
 enabled degree, so a lowered degree also needs `includeFlats` seeded into
 settings. The worked examples in `hint.spec.js` all start this way, and the
 same URLs are the quickest way to look at a route by hand.
+
+`/fretscience` takes `?strings=` (6 to 16) and `?tuning=guitar`, which puts
+standard tuning's one irregularity back — the string above the G is a B, a
+major third, not a fourth — so the tiles that straddle it are drawn bent.
+`?palette=` picks the two tile colours: `amethyst` (the default), `ember`,
+`dusk` or `neon`, each a block of seven values at the top of
+`fretscience.css`. The tiles have no outlines and are blended, so the two
+colours and the third they mix to are what draws every edge — which is why a
+palette is a spec'd thing and not a matter of taste. `?wallpaper` drops the
+page chrome and fits the board to one 1920x1080 frame; it is how the desktop
+backgrounds are rendered, and the specs leave it alone.
 
 `/key-quiz` picks its keys at random too, and `?key=` pins the first one,
 spelled in ASCII — `/key-quiz?key=Eb`, `/key-quiz?key=F%23` (a bare `#` would

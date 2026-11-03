@@ -1,0 +1,284 @@
+/* The Fretscience board and the prose around it.
+   style.css supplies the palette tokens and the metric-matched font
+   fallbacks; the chrome below is a copy of the Shape Explorer's rather than a
+   shared stylesheet, because that file is sized and bounded for a six-string
+   neck inside a 620px column and this page is neither. Thirty lines of
+   duplicated presentation is the cheaper of the two couplings. */
+
+/* style.css centres .app on both axes via body{align-items:center}, which on
+   a page taller than the viewport can hide the top of the content beyond the
+   scrollable area. Same fix as shape-explorer.css. */
+body{
+  align-items:flex-start;
+  display:block;
+  padding:16px 16px 32px;
+}
+
+/* ---- palettes (?palette=) ----
+   Two tile colours and the three inks that name them. Everything on the page
+   reads these, so a palette is one block of seven values and nothing else.
+   The -hot pair is the wallpaper's: on true black there is no page around the
+   board to hold the contrast, so each runs a step warmer there.
+
+     amethyst   crimson + azure         -> amethyst     (the default)
+     ember      burnt orange + azure    -> dusty rose
+     dusk       amber + violet          -> rose
+     neon       magenta + teal          -> orchid
+
+   The pairs are each about a third of the colour wheel apart. That is the
+   constraint, not a taste: screened, a near-complementary pair mixes to grey
+   and the third colour stops being a colour. */
+body{
+  --tile-1:#8c1f33;      --tile-2:#163a80;
+  --tile-1-hot:#9e2239;  --tile-2-hot:#194391;
+  --ink-1:#e2607c;       --ink-2:#6a9bf0;       --ink-mix:#bb86c9;
+}
+body.fs-pal-ember{
+  --tile-1:#96440c;      --tile-2:#163a80;
+  --tile-1-hot:#a64c0e;  --tile-2-hot:#194391;
+  --ink-1:#e58b4e;       --ink-2:#6a9bf0;       --ink-mix:#d09fb4;
+}
+body.fs-pal-dusk{
+  --tile-1:#8a4a10;      --tile-2:#4a1a8a;
+  --tile-1-hot:#9b5412;  --tile-2-hot:#54209e;
+  --ink-1:#e0a24e;       --ink-2:#a97be8;       --ink-mix:#dd94c0;
+}
+body.fs-pal-neon{
+  --tile-1:#8c1f5a;      --tile-2:#0f5a6e;
+  --tile-1-hot:#9e2366;  --tile-2-hot:#116478;
+  --ink-1:#e8619f;       --ink-2:#4fc2d8;       --ink-mix:#c49cd6;
+}
+
+.fs-page{
+  max-width:900px;
+  margin:0 auto;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+/* ---- header ---- */
+.fs-head{ display:flex; align-items:center; gap:10px; }
+.fs-brand{ display:flex; align-items:center; gap:9px; text-decoration:none; color:var(--text); }
+.fs-logo{
+  width:28px; height:28px; flex:0 0 auto; border-radius:8px;
+  background:linear-gradient(145deg, var(--live), var(--live-deep));
+  display:flex; align-items:center; justify-content:center; color:#04212a;
+}
+.fs-logo svg{ width:20px; height:20px; display:block; }
+.fs-brand b{ font-size:16px; font-weight:600; letter-spacing:-.01em; }
+.fs-badge{
+  font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace; font-size:11px;
+  font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--live); border:1px solid rgba(34,211,238,.35); background:rgba(34,211,238,.08);
+  padding:4px 9px; border-radius:999px;
+}
+.fs-back{
+  margin-left:auto; font-size:13px; font-weight:600; text-decoration:none;
+  color:var(--muted); border:1px solid var(--line-strong); padding:6px 12px; border-radius:8px;
+}
+.fs-back:hover{ color:var(--text); border-color:var(--muted); }
+
+/* ---- prose ---- */
+.fs-title{ font-size:24px; font-weight:600; letter-spacing:-.02em; margin:6px 0 0; }
+.fs-lede{ margin:0; color:var(--muted); font-size:14.5px; line-height:1.6; max-width:70ch; }
+.fs-lede b{ color:var(--text); font-weight:600; }
+/* Two necks, one page: ?tuning=guitar swaps which lede describes the board,
+   because the straight-fourths one stops being true the moment the B is in. */
+.fs-lede-guitar{ display:none; }
+body.fs-guitar .fs-lede-fourths{ display:none; }
+body.fs-guitar .fs-lede-guitar{ display:block; }
+
+.fs-notes{ margin-top:6px; max-width:70ch; color:var(--muted); font-size:14px; line-height:1.65; }
+.fs-notes h2{ font-size:16px; font-weight:600; color:var(--text); margin:0 0 8px; }
+.fs-notes p{ margin:0 0 10px; }
+.fs-notes ul{ margin:0 0 10px; padding-left:18px; }
+.fs-notes li{ margin-bottom:6px; }
+.fs-notes b{ color:var(--text); font-weight:600; }
+/* Specific enough to beat `.fs-notes b` above, which would otherwise paint
+   these the same colour as every other bolded word. */
+/* Lifted off the board's own values, which are too dark to read as type. */
+.fs-notes b.fs-ink-primary{ color:var(--ink-1); }
+.fs-notes b.fs-ink-secondary{ color:var(--ink-2); }
+.fs-notes b.fs-ink-mixed{ color:var(--ink-mix); }
+.fs-foot{ font-size:13px; color:var(--dim); }
+.fs-notes a{
+  color:var(--live); text-decoration:none; font-weight:600;
+  border-bottom:1px solid rgba(34,211,238,.35);
+}
+.fs-notes a:hover{ border-bottom-color:var(--live); }
+
+/* ---- controls ---- */
+.fs-controls{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:4px; }
+.fs-field{
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:11.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em;
+}
+.fs-field select{
+  appearance:none; -webkit-appearance:none;
+  background:var(--panel-3); border:1px solid var(--line-strong);
+  color:var(--text); font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  font-size:13px; font-weight:500; padding:8px 12px; border-radius:9px;
+  cursor:pointer; text-transform:none; letter-spacing:0;
+}
+
+/* The legend doubles as the switch for each overlay: pressing one takes its
+   colour off the board, which is the quickest way to see the bare pattern. */
+.fs-legend{ display:flex; gap:8px; flex-wrap:wrap; }
+.fs-leg{
+  display:inline-flex; align-items:center; gap:8px;
+  font-family:inherit; font-size:12.5px; font-weight:500; cursor:pointer;
+  background:var(--panel); border:1px solid var(--line); color:var(--muted);
+  padding:7px 13px; border-radius:999px;
+}
+.fs-leg:hover{ color:var(--text); border-color:var(--line-strong); }
+.fs-swatch{ width:13px; height:13px; border-radius:4px; flex:0 0 auto; }
+/* The swatches carry the board's own colours, so the outline is the chip's,
+   not the tile's — the tiles themselves have none. */
+.fs-swatch{ border:1px solid rgba(255,255,255,.18); }
+.fs-leg.primary .fs-swatch{ background:var(--tile-1); }
+.fs-leg.secondary .fs-swatch{ background:var(--tile-2); }
+.fs-leg[aria-pressed="false"]{ color:var(--dim); }
+.fs-leg[aria-pressed="false"] .fs-swatch{ background:transparent; }
+
+/* ---- board ---- */
+.fs-board-area{
+  display:flex; align-items:stretch; gap:2px;
+  border:1px solid var(--line); border-radius:16px; background:var(--panel);
+  padding:8px;
+}
+.fs-gutter{ flex:0 0 auto; display:flex; align-items:flex-start; }
+.fs-scroll{ flex:1 1 auto; min-width:0; overflow-x:auto; overflow-y:hidden; }
+.fs-scroll svg{ display:block; }
+
+/* The guitar inside the longer neck. Light enough that the shaded tiles still
+   read across it, but enough to say where the instrument stops. The edges do
+   most of the work: a wash strong enough to see on its own would fight the
+   overlays, whereas two lines across the board cannot be mistaken. */
+.fs-guitar-band{ fill:rgba(255,255,255,.07); }
+.fs-guitar-edge{ stroke:rgba(255,255,255,.4); stroke-width:1.2; }
+
+.fs-fretnum, .fs-open{
+  font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  fill:var(--dim);
+}
+/* The six strings a guitar actually has sit in the middle of the neck, so the
+   gutter has to say which they are: those are named at full strength and the
+   strings carrying the run on past them are left dim. */
+.fs-open{ fill:var(--dim); font-weight:500; }
+.fs-open-guitar{ fill:var(--text); font-weight:600; }
+/* Just enough of a pill to group the six as one instrument, and no more. */
+.fs-open-pill{ fill:rgba(255,255,255,.07); }
+
+/* The one step that is not a fourth, flagged where you read the tuning. */
+.fs-warn{ fill:#f0b429; stroke:#f0b429; stroke-width:1.6; stroke-linejoin:round; }
+.fs-warn-mark{
+  font-family:'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
+  fill:#1a1205;
+}
+
+/* The diagram's own title, above the fret numbers and inside the board, so a
+   screenshot of the board is captioned without the page around it. */
+.fs-boardtitle{
+  font-family:'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
+  fill:var(--text); font-weight:600; letter-spacing:-.01em;
+}
+
+.fs-name{
+  font-family:'IBM Plex Mono', 'IBM Plex Mono Fallback', monospace;
+  fill:var(--text);
+}
+.fs-note.root .fs-name{ fill:#04212a; }
+/* B and F: the two notes the pentatonic leaves out of its parent scale. Same
+   chip as the rest, at half opacity — present on the neck, but visibly not
+   part of the pattern the overlays are drawn around. */
+.fs-note.extra{ opacity:.5; }
+.fs-dot{ fill:var(--panel-3); stroke:var(--line-strong); stroke-width:1.3; }
+.fs-dot-root{ fill:var(--live); stroke:#8af0ff; stroke-width:1.5; }
+/* Off the scale: a faint dot rather than nothing, so the grid still reads as
+   a fretboard where the scale is silent. */
+.fs-dot-off{ fill:var(--panel-2); stroke:var(--line); stroke-width:1; opacity:.7; }
+
+/* No outlines: flat colour, and the overlaps do the drawing.
+   The tiling is complete — every note on the board is a corner of some tile —
+   so neighbouring boxes always share a fret and always overlap by a column.
+   Rather than fight that with thin washes and strokes, the two fills are
+   screened: light adds, so a shared column lights up as a colour of its own
+   and every edge is a colour boundary. screen is commutative, so what you see
+   never depends on which tile happened to be drawn first. Which two colours
+   do the mixing is a palette, set by ?palette= — see the top of this file.
+   Two tiles of the same colour overlapping stay in their own hue and simply
+   brighten, so that edge reads too without inventing a fourth colour. Every
+   palette is kept dark enough that two and three deep stay on the board
+   rather than blowing out to white. */
+.fs-box{ mix-blend-mode:screen; }
+.fs-box-primary{ fill:var(--tile-1); }
+.fs-box-secondary{ fill:var(--tile-2); }
+
+/* ---- wallpaper (?wallpaper) ----
+   The diagram on its own, filling exactly one 1920x1080 frame, so it can be
+   rendered out as a desktop background. Everything here is a repaint of the
+   same board — no second layout to keep in step with the first.
+
+   True black rather than the site's near-black: on an OLED panel an unlit
+   pixel is genuinely off, so #000 reads as depth instead of as dark grey, and
+   against it the accents can run hotter than they safely could on the page,
+   where the same values would glare. */
+body.fs-wallpaper{
+  background:#000;
+  padding:0;
+  overflow:hidden;
+
+  --neck:#05070a;
+  --string:#dde7f3;
+  --fretwire:#92a6bb;
+  --inlay:#46566e;
+  --panel-2:#10161e;
+  --panel-3:#1b2430;
+  --line:rgba(255,255,255,.10);
+  --line-strong:rgba(255,255,255,.20);
+  --text:#ffffff;
+  --muted:#b8c7d8;
+  --dim:#7d8fa3;
+  --live:#3ce9ff;
+}
+body.fs-wallpaper .fs-head,
+body.fs-wallpaper .fs-title,
+body.fs-wallpaper .fs-lede,
+body.fs-wallpaper .fs-controls,
+body.fs-wallpaper .fs-notes{ display:none; }
+
+body.fs-wallpaper .fs-page{ max-width:none; gap:0; }
+/* gap:0 as well as the zeroed padding — the two SVGs are sized to total
+   exactly 1920, so a 2px flex gap would push the board off the frame. */
+body.fs-wallpaper .fs-board-area{
+  width:1920px; height:1080px;
+  gap:0; padding:0; border:0; border-radius:0; background:#000;
+  align-items:center; justify-content:center;
+}
+/* The board is sized to the frame less its margin, so the scroller must take
+   its width from the SVG inside it rather than growing to fill the row —
+   otherwise it eats the slack and the neck sits hard against the left edge
+   instead of centred. */
+body.fs-wallpaper .fs-scroll{ overflow:visible; flex:0 0 auto; }
+body.fs-wallpaper .fs-gutter{ align-items:center; }
+
+/* A little hotter on true black, where the whole frame is tile and there is
+   no page around it to keep the contrast honest. Same three-colour system,
+   one step up. */
+body.fs-wallpaper .fs-box-primary{ fill:var(--tile-1-hot); }
+body.fs-wallpaper .fs-box-secondary{ fill:var(--tile-2-hot); }
+body.fs-wallpaper .fs-dot-root{ fill:var(--live); stroke:#b8f7ff; }
+/* Against true black the guitar's band can run a little hotter without
+   turning into a panel of its own. */
+body.fs-wallpaper .fs-guitar-band{ fill:rgba(255,255,255,.085); }
+body.fs-wallpaper .fs-open-pill{ fill:rgba(255,255,255,.09); }
+body.fs-wallpaper .fs-guitar-edge{ stroke:rgba(255,255,255,.5); stroke-width:1.4; }
+
+@media (max-width:560px){
+  .fs-title{ font-size:20px; }
+  .fs-lede{ font-size:13.5px; }
+  .fs-badge{ font-size:10px; padding:3px 7px; }
+  .fs-board-area{ padding:6px; border-radius:12px; }
+  .fs-leg{ padding:6px 10px; font-size:11.5px; }
+}
